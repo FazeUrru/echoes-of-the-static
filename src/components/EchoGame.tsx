@@ -5,6 +5,9 @@ import { EchoGameEngine } from '@/game/engine';
 import { GameState, Difficulty, DIFFICULTY_CONFIGS, CHAPTERS, ProfileSettings, AdvancedSettings, DEFAULT_PROFILE, DEFAULT_ADVANCED, ControlBinding, DEFAULT_CONTROLS, SPEEDRUN_CHALLENGES, CoopRole, CustomLevel } from '@/game/types';
 import { saveGame, loadGame, hasSave, buildSaveData, deleteSave, SaveData } from '@/game/saveSystem';
 import LevelEditor from './LevelEditor';
+import ParticleBackground from './ParticleBackground';
+import EchoMiniDemo from './EchoMiniDemo';
+import AudioDiary from './AudioDiary';
 
 // ============================================================
 // Hydration-safe hooks
@@ -64,6 +67,12 @@ export default function EchoGame() {
 
   // ---- Level Editor state ----
   const [showLevelEditor, setShowLevelEditor] = useState(false);
+
+  // ---- Mini Demo state ----
+  const [showMiniDemo, setShowMiniDemo] = useState(false);
+
+  // ---- Landing page section state ----
+  const [landingSection, setLandingSection] = useState<'hero' | 'demo' | 'diary' | 'trailer'>('hero');
 
   // ---- Save system state ----
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<number | null>(null);
@@ -500,31 +509,50 @@ export default function EchoGame() {
         </button>
       )}
 
-      {/* ===== MENU ===== */}
-      {gameState === 'menu' && !isStarted && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
-          <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,229,255,0.06) 2px,rgba(0,229,255,0.06) 4px)' }} />
+      {/* ===== MENU / LANDING PAGE ===== */}
+      {gameState === 'menu' && !isStarted && !showMiniDemo && (
+        <div className="landing-page absolute inset-0 overflow-y-auto bg-black z-10">
+          {/* Particle Background */}
+          <ParticleBackground />
 
-          <div className="text-center mb-8 animate-text-flicker">
-            <h1 className="text-5xl md:text-7xl font-mono font-bold tracking-[0.3em] mb-2" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.5),0 0 40px rgba(0,229,255,0.3)' }}>ECHOES</h1>
-            <h2 className="text-2xl md:text-4xl font-mono tracking-[0.2em] mb-2" style={{ color: '#0097a7' }}>OF THE STATIC</h2>
-            <div className="text-sm font-mono opacity-40" style={{ color: '#004d40' }}>v2.5 — Ecos de la Estática</div>
-          </div>
+          {/* CRT Scanline overlay */}
+          <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-1" style={{ backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,229,255,0.06) 2px,rgba(0,229,255,0.06) 4px)' }} />
 
-          <div className="max-w-md text-center mb-8 px-6 font-mono text-sm space-y-2">
-            <p style={{ color: 'rgba(0,229,255,0.4)' }}>Estás ciego. Solo puedes ver a través del sonido.</p>
-            <p style={{ color: 'rgba(255,23,68,0.5)' }} className="text-base">Pero ellas también te escuchan.</p>
-          </div>
+          {/* ===== HERO SECTION ===== */}
+          <section className="relative min-h-screen flex flex-col items-center justify-center px-6 z-10">
+            {/* Glitch Title with Chromatic Aberration */}
+            <div className="text-center mb-8 animate-text-flicker">
+              <h1 className="glitch-text text-5xl md:text-7xl lg:text-8xl font-mono font-bold tracking-[0.3em] mb-2"
+                data-text="ECHOES"
+                style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.5),0 0 40px rgba(0,229,255,0.3)' }}>
+                ECHOES
+              </h1>
+              <h2 className="text-2xl md:text-4xl font-mono tracking-[0.2em] mb-2" style={{ color: '#0097a7' }}>OF THE STATIC</h2>
+              <div className="text-sm font-mono opacity-40" style={{ color: '#004d40' }}>v3.0 — Ecos de la Estática</div>
+            </div>
 
-          <div className="flex flex-col gap-3 mb-8">
-            {saveExists && (() => {
-              const saved = loadGame();
-              if (!saved) return null;
-              const ago = Math.floor((Date.now() - saved.timestamp) / 60000);
-              const agoStr = ago < 1 ? 'Ahora' : ago < 60 ? `Hace ${ago}m` : `Hace ${Math.floor(ago / 60)}h`;
-              return (
-                <button
-                  onClick={() => {
+            {/* Improved Hook Text */}
+            <div className="max-w-lg text-center mb-10 px-6 font-mono space-y-3">
+              <p className="text-base md:text-lg leading-relaxed" style={{ color: 'rgba(0,229,255,0.6)', textShadow: '0 0 8px rgba(0,229,255,0.2)' }}>
+                La oscuridad no es tu enemiga. El silencio sí.
+              </p>
+              <p className="text-sm md:text-base" style={{ color: 'rgba(0,229,255,0.35)' }}>
+                Usa el sonido para ver, pero recuerda:
+              </p>
+              <p className="text-base md:text-lg font-bold" style={{ color: 'rgba(255,23,68,0.7)', textShadow: '0 0 10px rgba(255,23,68,0.3)' }}>
+                ellos también escuchan.
+              </p>
+            </div>
+
+            {/* Interactive Menu Buttons with Sound Wave Effect */}
+            <div className="flex flex-col gap-3 mb-8 w-full max-w-sm">
+              {saveExists && (() => {
+                const saved = loadGame();
+                if (!saved) return null;
+                const ago = Math.floor((Date.now() - saved.timestamp) / 60000);
+                const agoStr = ago < 1 ? 'Ahora' : ago < 60 ? `Hace ${ago}m` : `Hace ${Math.floor(ago / 60)}h`;
+                return (
+                  <SoundWaveButton onClick={() => {
                     setDifficulty(saved.difficulty as Difficulty);
                     setSelectedChapter(saved.currentChapter);
                     setUnlockedChapters(saved.unlockedChapters);
@@ -534,45 +562,125 @@ export default function EchoGame() {
                     if (saved.advanced) setAdvanced(saved.advanced as unknown as AdvancedSettings);
                     if (saved.controls && Array.isArray(saved.controls)) setControls(saved.controls as ControlBinding[]);
                     handleStart(saved.currentChapter, saved.difficulty as Difficulty, saved.hardcoreMode, saved.coopRole as CoopRole);
-                  }}
-                  className="px-8 py-3 font-mono text-sm tracking-widest border transition-all duration-300 hover:scale-105 active:scale-95 animate-menu-appear"
-                  style={{
-                    color: '#76ff03',
-                    borderColor: 'rgba(118,255,3,0.35)',
-                    backgroundColor: 'rgba(118,255,3,0.05)',
-                    textShadow: '0 0 10px rgba(118,255,3,0.3)',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#76ff03'; e.currentTarget.style.boxShadow = '0 0 20px rgba(118,255,3,0.15)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(118,255,3,0.35)'; e.currentTarget.style.boxShadow = 'none'; }}
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    <span>CONTINUAR PARTIDA</span>
-                    <span className="animate-label-new text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.2)' }}>NUEVO</span>
-                  </span>
-                  <span className="block text-[9px] mt-1 opacity-60 font-mono">Guardado: {agoStr} | Cap. {saved.currentChapter} | {saved.difficulty}</span>
-                </button>
-              );
-            })()}
-            <NeonButton onClick={() => { setIsStarted(true); setGameState('difficulty'); }}>NUEVA PARTIDA</NeonButton>
-            <NeonButton onClick={() => {
-              const eng = engineRef.current;
-              if (eng) {
-                eng.playCinematic(EchoGameEngine.TRAILER_CINEMATIC, () => {
-                  // Return to menu after trailer
-                });
-              }
-            }}>VER TRÁILER</NeonButton>
-            <NeonButton onClick={() => setShowSettings(true)} dim>AJUSTES</NeonButton>
-            <NeonButton onClick={() => setShowLevelEditor(true)} dim isNew>EDITOR DE NIVELES</NeonButton>
-          </div>
+                  }} color="#76ff03">
+                    <span className="flex items-center justify-center gap-2">
+                      <span>CONTINUAR PARTIDA</span>
+                      <span className="animate-label-new text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.2)' }}>NUEVO</span>
+                    </span>
+                    <span className="block text-[9px] mt-1 opacity-60 font-mono">Guardado: {agoStr} | Cap. {saved.currentChapter} | {saved.difficulty}</span>
+                  </SoundWaveButton>
+                );
+              })()}
+              <SoundWaveButton onClick={() => { setIsStarted(true); setGameState('difficulty'); }}>
+                NUEVA PARTIDA
+              </SoundWaveButton>
+              <SoundWaveButton onClick={() => setShowMiniDemo(true)} color="#ff6d00">
+                PROBAR ECOLOCALIZACIÓN
+              </SoundWaveButton>
+              <SoundWaveButton onClick={() => {
+                const eng = engineRef.current;
+                if (eng) {
+                  eng.playCinematic(EchoGameEngine.TRAILER_CINEMATIC, () => {});
+                }
+              }} color="#9c27b0">
+                VER TRÁILER
+              </SoundWaveButton>
+              <SoundWaveButton onClick={() => setShowSettings(true)} dim>
+                AJUSTES
+              </SoundWaveButton>
+              <SoundWaveButton onClick={() => setShowLevelEditor(true)} dim isNew>
+                EDITOR DE NIVELES
+              </SoundWaveButton>
+            </div>
 
-          <div className="font-mono text-[10px] text-center opacity-25 space-y-1" style={{ color: '#555' }}>
-            <p>WASD: Mover | Ratón: Mirar | SHIFT: Sigilo | SPACE: Eco | F: Linterna</p>
-            <p>E: Interactuar | 1-4: Inventario | Q: Usar | G: Soltar | R: Sonar | ESC: Pausa</p>
-          </div>
-          <div className="mt-4 font-mono text-[10px] opacity-20" style={{ color: '#0097a7' }}>🎧 Auriculares recomendados</div>
-          <div className="mt-2 font-mono text-[9px] opacity-15" style={{ color: '#ffd700' }}>🏆 Complétalo rápido para desbloquear personajes exclusivos</div>
+            {/* Scroll indicator */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce font-mono text-xs" style={{ color: 'rgba(0,229,255,0.3)' }}>
+              ▼ DESCUBRE MÁS
+            </div>
+          </section>
+
+          {/* ===== TRAILER SECTION ===== */}
+          <section className="relative z-10 py-16 px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,10,20,1) 50%, rgba(0,0,0,1) 100%)' }}>
+            <div className="max-w-4xl mx-auto">
+              <h2 className="font-mono text-2xl md:text-3xl tracking-widest text-center mb-8" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>
+                MECÁNICA DE ECOLOCALIZACIÓN
+              </h2>
+              {/* Trailer Simulation - Animated Canvas Preview */}
+              <div className="trailer-glow rounded-lg overflow-hidden relative" style={{ aspectRatio: '16/9', background: '#000' }}>
+                <TrailerPreview />
+              </div>
+              <p className="font-mono text-xs text-center mt-4" style={{ color: 'rgba(0,229,255,0.3)' }}>
+                Oscuridad total → Pulso → Revelación del monstruo → Oscuridad
+              </p>
+            </div>
+          </section>
+
+          {/* ===== AUDIO DIARY SECTION ===== */}
+          <section className="relative z-10 py-16 px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(10,0,20,1) 50%, rgba(0,0,0,1) 100%)' }}>
+            <div className="max-w-2xl mx-auto">
+              <h2 className="font-mono text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#9c27b0', textShadow: '0 0 20px rgba(156,39,176,0.3)' }}>
+                🎧 DIARIO DE AUDIO
+              </h2>
+              <p className="font-mono text-xs text-center mb-8" style={{ color: 'rgba(156,39,176,0.4)' }}>
+                Usa auriculares para escuchar los fragmentos del Proyecto Eco
+              </p>
+              <AudioDiary />
+            </div>
+          </section>
+
+          {/* ===== FEATURES SECTION ===== */}
+          <section className="relative z-10 py-16 px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,10,10,1) 50%, rgba(0,0,0,1) 100%)' }}>
+            <div className="max-w-4xl mx-auto">
+              <h2 className="font-mono text-2xl md:text-3xl tracking-widest text-center mb-8" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>
+                CARACTERÍSTICAS
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { icon: '🔊', title: 'Ecolocalización', desc: 'Usa pulsos de sonido para revelar el mundo. Cada eco ilumina las paredes... y alerta a tus enemigos.', color: '#00e5ff' },
+                  { icon: '👹', title: '3 Tipos de Entidades', desc: 'Acechadores lentos y persistentes. Cazadores rápidos y agresivos. Fantasmas que se teletransportan.', color: '#ff1744' },
+                  { icon: '🏆', title: '6 Capítulos + Retos', desc: 'Campaña completa con speedruns. Desbloquea personajes exclusivos completando capítulos rápido.', color: '#ffd600' },
+                  { icon: '🔇', title: 'Zonas Silenciosas', desc: 'Áreas donde el sonido no existe. Tu ecolocalización no funciona. Sobrevive en el silencio absoluto.', color: '#9c27b0' },
+                  { icon: '👥', title: 'Co-op Asimétrico', desc: 'El Oído ve el mapa. El Cuerpo se mueve. Coordínate con tu compañero para sobrevivir.', color: '#76ff03' },
+                  { icon: '☠️', title: 'Modo Hardcore', desc: 'Una sola vida. Sin HUD. Sin linterna. Solo audio binaural. ¿Te atreves?', color: '#ff6d00' },
+                ].map((feat, i) => (
+                  <div key={i} className="p-4 border rounded-sm" style={{ borderColor: `${feat.color}20`, background: `${feat.color}05` }}>
+                    <div className="text-2xl mb-2">{feat.icon}</div>
+                    <h3 className="font-mono text-sm font-bold mb-1" style={{ color: feat.color }}>{feat.title}</h3>
+                    <p className="font-mono text-[11px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>{feat.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ===== CONTROLS REFERENCE ===== */}
+          <section className="relative z-10 py-12 px-6">
+            <div className="max-w-md mx-auto text-center">
+              <h3 className="font-mono text-lg tracking-widest mb-4" style={{ color: '#00e5ff' }}>CONTROLES</h3>
+              <div className="font-mono text-[10px] space-y-1" style={{ color: '#555' }}>
+                <p>WASD: Mover | Ratón: Mirar | C/SHIFT: Agacharse</p>
+                <p>SPACE: Eco Activo (Ruidoso) | Clic: Eco Pasivo (Silencioso)</p>
+                <p>F: Pulso Activo (Revela mapa, ruido MÁXIMO)</p>
+                <p>E: Interactuar | 1-4: Inventario | Q: Usar | G: Soltar</p>
+                <p>R: Cambiar Sonar | T: Ping Co-op | ESC: Pausa</p>
+              </div>
+              <div className="mt-4 font-mono text-[10px] opacity-20" style={{ color: '#0097a7' }}>🎧 Auriculares recomendados</div>
+              <div className="mt-2 font-mono text-[9px] opacity-15" style={{ color: '#ffd700' }}>🏆 Complétalo rápido para desbloquear personajes exclusivos</div>
+            </div>
+          </section>
+
+          {/* ===== FOOTER ===== */}
+          <footer className="relative z-10 py-6 px-6 text-center border-t" style={{ borderColor: 'rgba(0,229,255,0.05)' }}>
+            <p className="font-mono text-[9px]" style={{ color: 'rgba(0,229,255,0.2)' }}>
+              ECHOES OF THE STATIC v3.0 — Ecos de la Estática
+            </p>
+          </footer>
         </div>
+      )}
+
+      {/* ===== MINI DEMO OVERLAY ===== */}
+      {showMiniDemo && gameState === 'menu' && (
+        <EchoMiniDemo onClose={() => setShowMiniDemo(false)} />
       )}
 
       {/* ===== DIFFICULTY SELECT ===== */}
@@ -1194,6 +1302,225 @@ function NeonButton({ children, onClick, dim = false, isNew = false }: { childre
         )}
       </span>
     </button>
+  );
+}
+
+// ============================================================
+// Sound Wave Button - Interactive menu button with expanding
+// wave rings and audio feedback on hover
+// ============================================================
+function SoundWaveButton({ children, onClick, dim = false, isNew = false, color = '#00e5ff' }: {
+  children: React.ReactNode; onClick: () => void; dim?: boolean; isNew?: boolean; color?: string;
+}) {
+  const audioRef = useRef<AudioContext | null>(null);
+
+  const playHoverSound = () => {
+    try {
+      if (!audioRef.current) {
+        audioRef.current = new AudioContext();
+      }
+      const ctx = audioRef.current;
+      if (ctx.state === 'suspended') ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.05);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.1);
+    } catch {}
+  };
+
+  return (
+    <button onClick={onClick}
+      className="sound-wave-btn relative px-8 py-3 font-mono text-sm tracking-widest border transition-all duration-300 hover:scale-105 active:scale-95 overflow-visible"
+      style={{
+        color: dim ? '#555' : color,
+        borderColor: dim ? 'rgba(100,100,100,0.2)' : `${color}40`,
+        backgroundColor: dim ? 'rgba(0,0,0,0.3)' : `${color}0a`,
+        textShadow: dim ? 'none' : `0 0 8px ${color}40`,
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = color;
+        e.currentTarget.style.boxShadow = `0 0 20px ${color}30`;
+        playHoverSound();
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = dim ? 'rgba(100,100,100,0.2)' : `${color}40`;
+        e.currentTarget.style.boxShadow = 'none';
+      }}>
+      {/* Expanding wave rings on hover */}
+      <div className="wave-ring" style={{ borderColor: color }} />
+      <div className="wave-ring" style={{ borderColor: color }} />
+      <div className="wave-ring" style={{ borderColor: color }} />
+      <span className="relative z-10 flex items-center justify-center gap-2">
+        {children}
+        {isNew && (
+          <span className="animate-label-new text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.2)' }}>NUEVO</span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+// ============================================================
+// Trailer Preview - Animated canvas showing echolocation mechanic
+// Demonstrates: darkness → pulse → monster reveal → darkness
+// ============================================================
+function TrailerPreview() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animRef = useRef<number>(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+    canvas.width = 800;
+    canvas.height = 450;
+
+    // Pre-define scene
+    const walls = [
+      { x1: 50, y1: 50, x2: 750, y2: 50 },
+      { x1: 750, y1: 50, x2: 750, y2: 400 },
+      { x1: 750, y1: 400, x2: 50, y2: 400 },
+      { x1: 50, y1: 400, x2: 50, y2: 50 },
+      { x1: 200, y1: 50, x2: 200, y2: 200 },
+      { x1: 400, y1: 150, x2: 400, y2: 300 },
+      { x1: 550, y1: 250, x2: 550, y2: 400 },
+      { x1: 300, y1: 300, x2: 450, y2: 300 },
+    ];
+
+    const entityPos = { x: 600, y: 250 };
+    const playerPos = { x: 150, y: 300 };
+    const cycleDuration = 6000; // 6 seconds per cycle
+
+    const render = (time: number) => {
+      const cycleTime = time % cycleDuration;
+      const phase = cycleTime / cycleDuration;
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, 800, 450);
+
+      // Phase 0-0.2: Complete darkness
+      // Phase 0.2-0.4: Pulse expanding, walls appearing
+      // Phase 0.4-0.6: Monster revealed
+      // Phase 0.6-0.8: Pulse fading, darkness returning
+      // Phase 0.8-1.0: Complete darkness again
+
+      if (phase > 0.15 && phase < 0.75) {
+        const pulsePhase = (phase - 0.15) / 0.6;
+        const pulseRadius = pulsePhase * 500;
+        const wallAlpha = phase < 0.5
+          ? Math.min(1, (phase - 0.15) * 3)
+          : Math.max(0, 1 - (phase - 0.5) * 2.5);
+
+        // Draw pulse ring
+        const ringAlpha = Math.max(0, 1 - pulsePhase);
+        ctx.strokeStyle = `rgba(0,229,255,${ringAlpha * 0.5})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(playerPos.x, playerPos.y, pulseRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Draw illuminated walls
+        ctx.strokeStyle = `rgba(0,229,255,${wallAlpha * 0.8})`;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = `rgba(0,229,255,${wallAlpha * 0.4})`;
+        ctx.shadowBlur = 8;
+        for (const w of walls) {
+          const wallDist = Math.min(
+            Math.sqrt((w.x1 - playerPos.x) ** 2 + (w.y1 - playerPos.y) ** 2),
+            Math.sqrt((w.x2 - playerPos.x) ** 2 + (w.y2 - playerPos.y) ** 2)
+          );
+          if (wallDist < pulseRadius) {
+            ctx.beginPath();
+            ctx.moveTo(w.x1, w.y1);
+            ctx.lineTo(w.x2, w.y2);
+            ctx.stroke();
+          }
+        }
+        ctx.shadowBlur = 0;
+
+        // Draw monster silhouette (appears when pulse reaches it)
+        const entityDist = Math.sqrt(
+          (entityPos.x - playerPos.x) ** 2 + (entityPos.y - playerPos.y) ** 2
+        );
+        if (pulseRadius > entityDist && phase > 0.3 && phase < 0.7) {
+          const monsterAlpha = Math.min(1, (phase - 0.3) * 5) * Math.max(0, 1 - (phase - 0.55) * 4);
+          ctx.fillStyle = `rgba(255,23,68,${monsterAlpha * 0.8})`;
+          ctx.shadowColor = `rgba(255,23,68,${monsterAlpha * 0.5})`;
+          ctx.shadowBlur = 15;
+          // Scary humanoid shape
+          ctx.beginPath();
+          ctx.ellipse(entityPos.x, entityPos.y, 15, 30, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(entityPos.x, entityPos.y - 38, 12, 0, Math.PI * 2);
+          ctx.fill();
+          // Glowing red eyes
+          ctx.fillStyle = `rgba(255,0,0,${monsterAlpha})`;
+          ctx.shadowColor = `rgba(255,0,0,${monsterAlpha})`;
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(entityPos.x - 4, entityPos.y - 40, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(entityPos.x + 4, entityPos.y - 40, 3, 0, Math.PI * 2);
+          ctx.fill();
+          // Reaching arms
+          ctx.strokeStyle = `rgba(255,23,68,${monsterAlpha * 0.6})`;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(entityPos.x - 15, entityPos.y - 15);
+          ctx.lineTo(entityPos.x - 35, entityPos.y + 10 + Math.sin(time * 0.003) * 5);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(entityPos.x + 15, entityPos.y - 15);
+          ctx.lineTo(entityPos.x + 35, entityPos.y + 10 + Math.sin(time * 0.003 + 1) * 5);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+
+        // Player position indicator
+        ctx.fillStyle = `rgba(0,229,255,${wallAlpha})`;
+        ctx.beginPath();
+        ctx.arc(playerPos.x, playerPos.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Phase text overlay
+      let phaseText = '';
+      if (phase < 0.15) phaseText = 'OSCURIDAD TOTAL';
+      else if (phase < 0.35) phaseText = 'PULSO DE SONIDO...';
+      else if (phase < 0.55) phaseText = '¡ENTIDAD DETECTADA!';
+      else if (phase < 0.75) phaseText = 'LA OSCURIDAD REGRESA...';
+      else phaseText = 'OSCURIDAD TOTAL';
+
+      ctx.fillStyle = phase > 0.3 && phase < 0.55 ? 'rgba(255,23,68,0.7)' : 'rgba(0,229,255,0.4)';
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = phase > 0.3 && phase < 0.55 ? 'rgba(255,23,68,0.5)' : 'rgba(0,229,255,0.3)';
+      ctx.shadowBlur = 10;
+      ctx.fillText(phaseText, 400, 430);
+      ctx.shadowBlur = 0;
+
+      animRef.current = requestAnimationFrame(render);
+    };
+
+    animRef.current = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(animRef.current);
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="w-full h-full"
+      style={{ imageRendering: 'auto' }}
+    />
   );
 }
 

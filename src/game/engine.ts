@@ -177,6 +177,9 @@ export class EchoGameEngine {
   isInSilentZone: boolean = false;
   isInWhiteNoiseZone: boolean = false;
 
+  // ---- Crouch toggle state (C key toggles, Shift holds) ----
+  isCrouching: boolean = false;
+
   // ---- Lore state ----
   currentLoreIndex: number = 0;
   pendingLore: string | null = null;
@@ -573,7 +576,11 @@ export class EchoGameEngine {
         }
         if (this.isAction('flashlight', e.code)) {
           e.preventDefault();
-          this.toggleFlashlight();
+          this.emitActivePulse();
+        }
+        if (this.isAction('crouch', e.code)) {
+          e.preventDefault();
+          this.isCrouching = !this.isCrouching;
         }
         if (this.isAction('sonarToggle', e.code)) {
           e.preventDefault();
@@ -637,8 +644,13 @@ export class EchoGameEngine {
     };
 
     const onClick = () => {
-      if (this.canvas && this.state === 'playing') {
-        this.canvas.requestPointerLock();
+      if (this.state === 'playing') {
+        if (this.mouseLocked) {
+          // Left click while pointer locked: emit passive echo
+          this.emitPassiveEcho();
+        } else if (this.canvas) {
+          this.canvas.requestPointerLock();
+        }
       }
     };
 
@@ -820,6 +832,60 @@ export class EchoGameEngine {
     this.audio.resume();
 
     this.illuminateArea(this.player.pos, 2, 0.6, NEON_COLORS.wallSide);
+  }
+
+  /** Active Pulse (F key): reveals the entire map in a LARGE radius but generates MAXIMUM noise */
+  emitActivePulse() {
+    if (this.pulseCooldownTimer > 0) return;
+    if (this.isInSilentZone) return;
+
+    // Body role: CANNOT emit echolocation pulses
+    if (this.coopEnabled && this.coopRole === 'body') return;
+    // Ear role: handled separately
+    if (this.coopEnabled && this.coopRole === 'ear') return;
+
+    const now = performance.now();
+    const radius = this.diffConfig.pulseRadius * 2.0; // 2x radius
+    this.pulses.push({
+      origin: { ...this.player.pos },
+      radius,
+      startTime: now,
+      duration: PULSE_ANIM_DURATION * 1.5,
+      intensity: 1.0,
+    });
+
+    this.pulseCooldownTimer = this.diffConfig.pulseCooldown * 1.5; // 1.5x cooldown
+    this.addSoundEvent(this.player.pos, 1.5, radius); // 1.5x noise
+    this.audio.playPulse(true);
+    this.audio.resume();
+    this.illuminateArea(this.player.pos, 5, 1.0, '#ff6d00'); // Orange color for active pulse
+    this.shakeX = (Math.random() - 0.5) * 10;
+    this.shakeY = (Math.random() - 0.5) * 10;
+    this.shakeDecay = 500;
+  }
+
+  /** Passive Echo (left click): silent, short range ~30% of normal, does NOT alert entities */
+  emitPassiveEcho() {
+    // Body role: CANNOT emit echolocation pulses
+    if (this.coopEnabled && this.coopRole === 'body') return;
+    // Ear role: handled separately
+    if (this.coopEnabled && this.coopRole === 'ear') return;
+
+    const now = performance.now();
+    const radius = this.diffConfig.pulseRadius * 0.3; // 30% range
+    this.pulses.push({
+      origin: { ...this.player.pos },
+      radius,
+      startTime: now,
+      duration: PULSE_ANIM_DURATION * 0.5,
+      intensity: 0.4,
+    });
+
+    this.pulseCooldownTimer = this.diffConfig.pulseCooldown * 0.3; // Short cooldown
+    // NO sound event - passive echo is silent
+    this.audio.playPulse(false);
+    this.audio.resume();
+    this.illuminateArea(this.player.pos, 2, 0.3, NEON_COLORS.wallSide);
   }
 
   // ============================================================
@@ -1435,7 +1501,16 @@ export class EchoGameEngine {
   private updatePlayer(dt: number) {
     const p = this.player;
     p.isMoving = false;
-    p.isSneaking = this.isActionDown('sneak') || this.touchSneak;
+    p.isSneaking = this.isActionDown('sneak') || this.isCrouching || this.touchSneak;
+
+    // Crouch reduces echolocation range by 40%
+    if (p.isSneaking) {
+      this.passiveSonarRevealRadius = 1.5;
+      this.passiveEntityRevealRadius = 2.5;
+    } else {
+      this.passiveSonarRevealRadius = 2.5;
+      this.passiveEntityRevealRadius = 4;
+    }
 
     // Ear role: CANNOT move, CAN rotate only
     if (this.coopEnabled && this.coopRole === 'ear') {
@@ -1555,7 +1630,7 @@ export class EchoGameEngine {
           this.audio.playFootstep(p.isSneaking);
         }
 
-        const radius = p.isSneaking ? this.diffConfig.footstepRadius * 0.4 : this.diffConfig.footstepRadius;
+        const radius = p.isSneaking ? this.diffConfig.footstepRadius * 0.25 : this.diffConfig.footstepRadius;
         const volume = p.isSneaking ? 0.2 : 0.5;
         if (!this.isInSilentZone) {
           this.addSoundEvent(p.pos, volume, radius);
