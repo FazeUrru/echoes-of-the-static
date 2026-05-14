@@ -344,8 +344,10 @@ export default function EchoGame() {
                 }
                 j.dx = dx;
                 j.dy = dy;
-                eng.touchMoveX = -dx / maxR; // -1 to 1, positive = right (negated to match keyboard strafe convention)
+                // Joystick X controls TURNING (look left/right), Y controls forward/back
+                eng.touchLookDelta += dx * 0.3; // swipe left/right = turn
                 eng.touchMoveY = -dy / maxR; // -1 to 1, positive = forward (up on screen = forward)
+                eng.touchMoveX = 0; // no strafe from joystick
                 setJoystickPos({ dx, dy, active: true });
               }
             }
@@ -361,6 +363,7 @@ export default function EchoGame() {
                   eng.touchMoveX = 0;
                   eng.touchMoveY = 0;
                 }
+                // Note: touchLookDelta is consumed each frame by the engine, no need to reset
                 joystickRef.current = { active: false, touchId: -1, cx: 0, cy: 0, dx: 0, dy: 0 };
                 setJoystickPos({ dx: 0, dy: 0, active: false });
               }
