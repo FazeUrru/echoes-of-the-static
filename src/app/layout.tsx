@@ -36,6 +36,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -51,10 +52,12 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Echoes of the Static" />
         <link rel="apple-touch-icon" href="/logo.svg" />
+        {/* Prevent iOS auto-zoom on input focus & ensure no shrink-to-fit */}
+        <meta name="format-detection" content="telephone=no" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-hidden`}
-        style={{ margin: 0, padding: 0, background: '#000' }}
+        style={{ margin: 0, padding: 0, background: '#000', paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)', paddingBottom: 'env(safe-area-inset-bottom)' }}
         suppressHydrationWarning
       >
         {children}

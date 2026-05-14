@@ -257,18 +257,18 @@ export default function EchoGame() {
   // Don't render interactive UI until client-side mounted (prevents hydration mismatch)
   if (!mounted) {
     return (
-      <div className="relative w-full h-screen bg-black overflow-hidden">
+      <div className="relative w-full h-[100dvh] bg-black overflow-hidden">
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black">
-          <h1 className="text-5xl font-mono font-bold tracking-[0.3em]" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.5)' }}>ECHOES</h1>
-          <h2 className="text-2xl font-mono tracking-[0.2em] mt-2" style={{ color: '#0097a7' }}>OF THE STATIC</h2>
-          <div className="mt-4 font-mono text-xs opacity-30" style={{ color: '#0097a7' }}>Cargando...</div>
+          <h1 className="text-3xl sm:text-5xl font-mono font-bold tracking-[0.2em] sm:tracking-[0.3em]" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.5)' }}>ECHOES</h1>
+          <h2 className="text-lg sm:text-2xl font-mono tracking-[0.15em] sm:tracking-[0.2em] mt-1 sm:mt-2" style={{ color: '#0097a7' }}>OF THE STATIC</h2>
+          <div className="mt-3 font-mono text-xs opacity-30" style={{ color: '#0097a7' }}>Cargando...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className="relative w-full h-screen bg-black overflow-hidden select-none game-container" style={{ cursor: gameState === 'playing' && !isMobile ? 'crosshair' : 'default', boxShadow: gameState === 'playing' && engineLiveState.sonarMode === 'passive' ? 'inset 0 0 60px rgba(156,39,176,0.15)' : 'none' }}
+    <div ref={containerRef} className="relative w-full h-[100dvh] bg-black overflow-hidden select-none game-container" style={{ cursor: gameState === 'playing' && !isMobile ? 'crosshair' : 'default', boxShadow: gameState === 'playing' && engineLiveState.sonarMode === 'passive' ? 'inset 0 0 60px rgba(156,39,176,0.15)' : 'none', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
       onClick={() => { if (gameState === 'playing' && !isMobile && canvasRef.current) canvasRef.current.requestPointerLock(); }}>
 
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }} />
@@ -315,7 +315,7 @@ export default function EchoGame() {
       {/* ===== VIRTUAL JOYSTICK (Left Side) ===== */}
       {isMobile && gameState === 'playing' && (
         <div className="touch-joystick absolute z-20"
-          style={{ left: 20, bottom: 30, width: 140, height: 140 }}
+          style={{ left: 12, bottom: 20, width: 110, height: 110 }}
           onTouchStart={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -337,7 +337,7 @@ export default function EchoGame() {
               if (t.identifier === j.touchId) {
                 let dx = t.clientX - j.cx;
                 let dy = t.clientY - j.cy;
-                const maxR = 50;
+                const maxR = 40;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist > maxR) {
                   dx = (dx / dist) * maxR;
@@ -373,8 +373,8 @@ export default function EchoGame() {
           {/* Inner thumb */}
           <div className="absolute rounded-full"
             style={{
-              width: 50, height: 50,
-              left: 45 + joystickPos.dx, top: 45 + joystickPos.dy,
+              width: 40, height: 40,
+              left: 35 + joystickPos.dx, top: 35 + joystickPos.dy,
               background: 'rgba(0,229,255,0.4)',
               boxShadow: '0 0 10px rgba(0,229,255,0.3)',
               transition: joystickPos.active ? 'none' : 'left 0.1s, top 0.1s',
@@ -384,27 +384,28 @@ export default function EchoGame() {
 
       {/* ===== ACTION BUTTONS (Right Side) ===== */}
       {isMobile && gameState === 'playing' && (
-        <div className="absolute right-3 bottom-4 z-20 flex flex-col items-end gap-2">
+        <div className="absolute right-2 bottom-3 z-20 flex flex-col items-end gap-1.5">
           {/* ECO - Large pulse button */}
-          <button className="touch-btn game-touch-btn game-touch-btn-lg"
+          <button className="touch-btn game-touch-btn"
+            style={{ width: 60, height: 60, fontSize: 13, borderRadius: '50%', borderWidth: 2, borderColor: 'rgba(0,229,255,0.4)', boxShadow: '0 0 8px rgba(0,229,255,0.15)' }}
             onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.emitPulse(); }}>
             ECO
           </button>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             {/* Flashlight */}
-            <button className="touch-btn game-touch-btn game-touch-btn-md"
+            <button className="touch-btn game-touch-btn game-touch-btn-sm"
               onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.toggleFlashlight(); }}>
               🔦
             </button>
             {/* Interact */}
-            <button className="touch-btn game-touch-btn game-touch-btn-md"
+            <button className="touch-btn game-touch-btn game-touch-btn-sm"
               onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.handleInteract(); }}>
               E
             </button>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             {/* Sneak toggle */}
-            <button className={`touch-btn game-touch-btn game-touch-btn-md ${sneakActive ? 'game-touch-btn-active' : ''}`}
+            <button className={`touch-btn game-touch-btn game-touch-btn-sm ${sneakActive ? 'game-touch-btn-active' : ''}`}
               onTouchStart={(e) => {
                 e.preventDefault(); e.stopPropagation();
                 const newVal = !sneakActive;
@@ -416,16 +417,19 @@ export default function EchoGame() {
             </button>
             {/* Use item */}
             <button className="touch-btn game-touch-btn game-touch-btn-sm"
+              style={{ minWidth: 36, minHeight: 36, fontSize: 12 }}
               onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.useSelectedItem(); }}>
               ▶
             </button>
             {/* Drop item */}
             <button className="touch-btn game-touch-btn game-touch-btn-sm"
+              style={{ minWidth: 36, minHeight: 36, fontSize: 12 }}
               onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.dropSelectedItem(); }}>
               ✕
             </button>
             {/* Microphone toggle */}
             <button className="touch-btn game-touch-btn game-touch-btn-sm"
+              style={{ minWidth: 36, minHeight: 36, fontSize: 12 }}
               onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); setShowMicConfirm(true); }}>
               🎤
             </button>
@@ -471,7 +475,7 @@ export default function EchoGame() {
       {gameState === 'playing' && !engineLiveState.hardcoreMode && (
         <>
           {/* Sonar mode indicator */}
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 font-mono text-xs tracking-widest"
+          <div className="absolute top-1 sm:top-2 left-1/2 -translate-x-1/2 z-20 font-mono text-[10px] sm:text-xs tracking-widest"
             style={{
               color: engineLiveState.sonarMode === 'active' ? '#00e5ff' : '#9c27b0',
               textShadow: `0 0 10px ${engineLiveState.sonarMode === 'active' ? 'rgba(0,229,255,0.5)' : 'rgba(156,39,176,0.5)'}`,
@@ -479,13 +483,13 @@ export default function EchoGame() {
             SONAR: {engineLiveState.sonarMode === 'active' ? 'ACTIVO' : 'PASIVO'}
           </div>
           {engineLiveState.isInSilentZone && (
-            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 font-mono text-sm tracking-widest animate-pulse"
+            <div className="absolute top-8 sm:top-14 left-1/2 -translate-x-1/2 z-20 font-mono text-xs sm:text-sm tracking-widest animate-pulse"
               style={{ color: '#9c27b0', textShadow: '0 0 10px rgba(156,39,176,0.5)' }}>
               🔇 ZONA SILENCIOSA
             </div>
           )}
           {engineLiveState.isInWhiteNoiseZone && (
-            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 font-mono text-sm tracking-widest animate-pulse"
+            <div className="absolute top-8 sm:top-14 left-1/2 -translate-x-1/2 z-20 font-mono text-xs sm:text-sm tracking-widest animate-pulse"
               style={{ color: '#ffffff', textShadow: '0 0 10px rgba(255,255,255,0.5)' }}>
               📡 RUIDO BLANCO
             </div>
@@ -545,33 +549,33 @@ export default function EchoGame() {
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-1" style={{ backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,229,255,0.06) 2px,rgba(0,229,255,0.06) 4px)' }} />
 
           {/* ===== HERO SECTION ===== */}
-          <section className="relative min-h-screen flex flex-col items-center justify-center px-6 z-10">
+          <section className="relative min-h-[100dvh] flex flex-col items-center justify-center px-4 sm:px-6 z-10 pt-12 pb-16">
             {/* Glitch Title with Chromatic Aberration */}
-            <div className="text-center mb-8 animate-text-flicker">
-              <h1 className="glitch-text text-5xl md:text-7xl lg:text-8xl font-mono font-bold tracking-[0.3em] mb-2"
+            <div className="text-center mb-6 sm:mb-8 animate-text-flicker">
+              <h1 className="glitch-text text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-mono font-bold tracking-[0.15em] sm:tracking-[0.3em] mb-1 sm:mb-2"
                 data-text="ECHOES"
                 style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.5),0 0 40px rgba(0,229,255,0.3)' }}>
                 ECHOES
               </h1>
-              <h2 className="text-2xl md:text-4xl font-mono tracking-[0.2em] mb-2" style={{ color: '#0097a7' }}>OF THE STATIC</h2>
-              <div className="text-sm font-mono opacity-40" style={{ color: '#004d40' }}>v3.0 — Ecos de la Estática</div>
+              <h2 className="text-lg sm:text-2xl md:text-4xl font-mono tracking-[0.12em] sm:tracking-[0.2em] mb-1 sm:mb-2" style={{ color: '#0097a7' }}>OF THE STATIC</h2>
+              <div className="text-xs sm:text-sm font-mono opacity-40" style={{ color: '#004d40' }}>v3.0 — Ecos de la Estática</div>
             </div>
 
             {/* Improved Hook Text */}
-            <div className="max-w-lg text-center mb-10 px-6 font-mono space-y-3">
-              <p className="text-base md:text-lg leading-relaxed" style={{ color: 'rgba(0,229,255,0.6)', textShadow: '0 0 8px rgba(0,229,255,0.2)' }}>
+            <div className="max-w-lg text-center mb-6 sm:mb-10 px-2 sm:px-6 font-mono space-y-2 sm:space-y-3">
+              <p className="text-sm sm:text-base md:text-lg leading-relaxed" style={{ color: 'rgba(0,229,255,0.6)', textShadow: '0 0 8px rgba(0,229,255,0.2)' }}>
                 La oscuridad no es tu enemiga. El silencio sí.
               </p>
-              <p className="text-sm md:text-base" style={{ color: 'rgba(0,229,255,0.35)' }}>
+              <p className="text-xs sm:text-sm md:text-base" style={{ color: 'rgba(0,229,255,0.35)' }}>
                 Usa el sonido para ver, pero recuerda:
               </p>
-              <p className="text-base md:text-lg font-bold" style={{ color: 'rgba(255,23,68,0.7)', textShadow: '0 0 10px rgba(255,23,68,0.3)' }}>
+              <p className="text-sm sm:text-base md:text-lg font-bold" style={{ color: 'rgba(255,23,68,0.7)', textShadow: '0 0 10px rgba(255,23,68,0.3)' }}>
                 ellos también escuchan.
               </p>
             </div>
 
             {/* Interactive Menu Buttons with Sound Wave Effect */}
-            <div className="flex flex-col gap-3 mb-8 w-full max-w-sm">
+            <div className="flex flex-col gap-2.5 sm:gap-3 mb-6 sm:mb-8 w-full max-w-sm px-2">
               {saveExists && cachedSave && (
                 <SoundWaveButton onClick={() => {
                   setDifficulty(cachedSave.difficulty as Difficulty);
@@ -614,15 +618,15 @@ export default function EchoGame() {
             </div>
 
             {/* Scroll indicator */}
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce font-mono text-xs" style={{ color: 'rgba(0,229,255,0.3)' }}>
+            <div className="absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 animate-bounce font-mono text-[10px] sm:text-xs" style={{ color: 'rgba(0,229,255,0.3)' }}>
               ▼ DESCUBRE MÁS
             </div>
           </section>
 
           {/* ===== TRAILER SECTION ===== */}
-          <section className="relative z-10 py-16 px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,10,20,1) 50%, rgba(0,0,0,1) 100%)' }}>
+          <section className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,10,20,1) 50%, rgba(0,0,0,1) 100%)' }}>
             <div className="max-w-4xl mx-auto">
-              <h2 className="font-mono text-2xl md:text-3xl tracking-widest text-center mb-8" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>
+              <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-6 sm:mb-8" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>
                 MECÁNICA DE ECOLOCALIZACIÓN
               </h2>
               {/* Trailer Simulation - Animated Canvas Preview */}
@@ -636,12 +640,12 @@ export default function EchoGame() {
           </section>
 
           {/* ===== AUDIO DIARY SECTION ===== */}
-          <section className="relative z-10 py-16 px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(10,0,20,1) 50%, rgba(0,0,0,1) 100%)' }}>
+          <section className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(10,0,20,1) 50%, rgba(0,0,0,1) 100%)' }}>
             <div className="max-w-2xl mx-auto">
-              <h2 className="font-mono text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#9c27b0', textShadow: '0 0 20px rgba(156,39,176,0.3)' }}>
+              <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#9c27b0', textShadow: '0 0 20px rgba(156,39,176,0.3)' }}>
                 🎧 DIARIO DE AUDIO
               </h2>
-              <p className="font-mono text-xs text-center mb-8" style={{ color: 'rgba(156,39,176,0.4)' }}>
+              <p className="font-mono text-[10px] sm:text-xs text-center mb-6 sm:mb-8" style={{ color: 'rgba(156,39,176,0.4)' }}>
                 Usa auriculares para escuchar los fragmentos del Proyecto Eco
               </p>
               <AudioDiary />
@@ -649,12 +653,12 @@ export default function EchoGame() {
           </section>
 
           {/* ===== FEATURES SECTION ===== */}
-          <section className="relative z-10 py-16 px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,10,10,1) 50%, rgba(0,0,0,1) 100%)' }}>
+          <section className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,10,10,1) 50%, rgba(0,0,0,1) 100%)' }}>
             <div className="max-w-4xl mx-auto">
-              <h2 className="font-mono text-2xl md:text-3xl tracking-widest text-center mb-8" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>
+              <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-6 sm:mb-8" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>
                 CARACTERÍSTICAS
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
                 {[
                   { icon: '🔊', title: 'Ecolocalización', desc: 'Usa pulsos de sonido para revelar el mundo. Cada eco ilumina las paredes... y alerta a tus enemigos.', color: '#00e5ff' },
                   { icon: '👹', title: '3 Tipos de Entidades', desc: 'Acechadores lentos y persistentes. Cazadores rápidos y agresivos. Fantasmas que se teletransportan.', color: '#ff1744' },
@@ -663,10 +667,11 @@ export default function EchoGame() {
                   { icon: '👥', title: 'Co-op Asimétrico', desc: 'El Oído ve el mapa. El Cuerpo se mueve. Coordínate con tu compañero para sobrevivir.', color: '#76ff03' },
                   { icon: '☠️', title: 'Modo Hardcore', desc: 'Una sola vida. Sin HUD. Sin linterna. Solo audio binaural. ¿Te atreves?', color: '#ff6d00' },
                 ].map((feat, i) => (
-                  <div key={i} className="p-4 border rounded-sm" style={{ borderColor: `${feat.color}20`, background: `${feat.color}05` }}>
-                    <div className="text-2xl mb-2">{feat.icon}</div>
-                    <h3 className="font-mono text-sm font-bold mb-1" style={{ color: feat.color }}>{feat.title}</h3>
-                    <p className="font-mono text-[11px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>{feat.desc}</p>
+                  <div key={i} className="p-2.5 sm:p-4 border rounded-sm" style={{ borderColor: `${feat.color}20`, background: `${feat.color}05` }}>
+                    <div className="text-lg sm:text-2xl mb-1 sm:mb-2">{feat.icon}</div>
+                    <h3 className="font-mono text-[10px] sm:text-sm font-bold mb-0.5 sm:mb-1" style={{ color: feat.color }}>{feat.title}</h3>
+                    <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed hidden sm:block" style={{ color: 'rgba(255,255,255,0.4)' }}>{feat.desc}</p>
+                    <p className="font-mono text-[8px] leading-relaxed sm:hidden" style={{ color: 'rgba(255,255,255,0.3)' }}>{feat.desc}</p>
                   </div>
                 ))}
               </div>
@@ -674,18 +679,18 @@ export default function EchoGame() {
           </section>
 
           {/* ===== CONTROLS REFERENCE ===== */}
-          <section className="relative z-10 py-12 px-6">
+          <section className="relative z-10 py-8 sm:py-12 px-4 sm:px-6">
             <div className="max-w-md mx-auto text-center">
-              <h3 className="font-mono text-lg tracking-widest mb-4" style={{ color: '#00e5ff' }}>CONTROLES</h3>
-              <div className="font-mono text-[10px] space-y-1" style={{ color: '#555' }}>
+              <h3 className="font-mono text-base sm:text-lg tracking-widest mb-3 sm:mb-4" style={{ color: '#00e5ff' }}>CONTROLES</h3>
+              <div className="font-mono text-[9px] sm:text-[10px] space-y-1" style={{ color: '#555' }}>
                 <p>WASD: Mover | Ratón: Mirar | C/SHIFT: Agacharse</p>
-                <p>SPACE: Eco Activo (Ruidoso) | Clic: Eco Pasivo (Silencioso)</p>
+                <p>SPACE: Eco Activo | Clic: Eco Pasivo (Silencioso)</p>
                 <p>F: Pulso Activo (Revela mapa, ruido MÁXIMO)</p>
                 <p>E: Interactuar | 1-4: Inventario | Q: Usar | G: Soltar</p>
                 <p>R: Cambiar Sonar | T: Ping Co-op | ESC: Pausa</p>
               </div>
-              <div className="mt-4 font-mono text-[10px] opacity-20" style={{ color: '#0097a7' }}>🎧 Auriculares recomendados</div>
-              <div className="mt-2 font-mono text-[9px] opacity-15" style={{ color: '#ffd700' }}>🏆 Complétalo rápido para desbloquear personajes exclusivos</div>
+              <div className="mt-3 font-mono text-[9px] sm:text-[10px] opacity-20" style={{ color: '#0097a7' }}>🎧 Auriculares recomendados</div>
+              <div className="mt-2 font-mono text-[8px] sm:text-[9px] opacity-15" style={{ color: '#ffd700' }}>🏆 Complétalo rápido para desbloquear personajes exclusivos</div>
             </div>
           </section>
 
@@ -705,55 +710,58 @@ export default function EchoGame() {
 
       {/* ===== DIFFICULTY SELECT ===== */}
       {gameState === 'difficulty' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10 px-4 overflow-y-auto">
-          <h2 className="text-2xl font-mono mb-8 tracking-widest" style={{ color: '#00e5ff' }}>DIFICULTAD</h2>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 max-w-4xl w-full mb-6">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10 px-3 sm:px-4 overflow-y-auto py-8">
+          <h2 className="text-xl sm:text-2xl font-mono mb-4 sm:mb-8 tracking-widest" style={{ color: '#00e5ff' }}>DIFICULTAD</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 max-w-4xl w-full mb-4 sm:mb-6">
             {(Object.entries(DIFFICULTY_CONFIGS) as [Difficulty, typeof DIFFICULTY_CONFIGS.medium][]).map(([key, cfg]) => (
               <button key={key} onClick={() => setDifficulty(key)}
-                className="p-4 border font-mono text-left transition-all hover:scale-105"
+                className="p-2.5 sm:p-4 border font-mono text-left transition-all hover:scale-105 active:scale-95"
                 style={{
                   borderColor: difficulty === key ? '#00e5ff' : 'rgba(0,229,255,0.15)',
                   backgroundColor: difficulty === key ? 'rgba(0,229,255,0.08)' : 'rgba(0,0,0,0.5)',
                   color: difficulty === key ? '#00e5ff' : '#666',
+                  minHeight: 44,
                 }}>
-                <div className="text-sm font-bold mb-1">{cfg.label}</div>
-                <div className="text-[10px] opacity-60">{cfg.description}</div>
-                <div className="text-[9px] mt-2 opacity-40">
-                  {cfg.entityCount} enemigos | Inventario: {cfg.inventorySize}
+                <div className="text-xs sm:text-sm font-bold mb-0.5 sm:mb-1">{cfg.label}</div>
+                <div className="text-[9px] sm:text-[10px] opacity-60">{cfg.description}</div>
+                <div className="text-[8px] sm:text-[9px] mt-1 sm:mt-2 opacity-40">
+                  {cfg.entityCount} enemigos | Inv: {cfg.inventorySize}
                 </div>
               </button>
             ))}
           </div>
 
           {/* Hardcore Mode Toggle */}
-          <div className="mb-6 w-full max-w-md">
+          <div className="mb-4 sm:mb-6 w-full max-w-md">
             <button onClick={() => setHardcoreMode(!hardcoreMode)}
-              className="w-full p-4 border font-mono text-sm transition-all"
+              className="w-full p-3 sm:p-4 border font-mono text-xs sm:text-sm transition-all active:scale-95"
               style={{
                 borderColor: hardcoreMode ? '#ff1744' : 'rgba(255,23,68,0.2)',
                 backgroundColor: hardcoreMode ? 'rgba(255,23,68,0.1)' : 'rgba(0,0,0,0.5)',
                 color: hardcoreMode ? '#ff1744' : '#666',
+                minHeight: 44,
               }}>
               <div className="flex items-center justify-between">
                 <span className="font-bold">☠️ MODO HARDCORE</span>
-                <span className="text-xs">{hardcoreMode ? 'ON' : 'OFF'}</span>
+                <span className="text-[10px] sm:text-xs">{hardcoreMode ? 'ON' : 'OFF'}</span>
               </div>
-              <div className="text-[10px] mt-1 opacity-60">⚠️ Una sola vida. Sin HUD. Solo audio binaural.</div>
+              <div className="text-[9px] sm:text-[10px] mt-1 opacity-60">⚠️ Una sola vida. Sin HUD. Solo audio binaural.</div>
             </button>
           </div>
 
           {/* Co-op Mode */}
-          <div className="mb-6 w-full max-w-md">
+          <div className="mb-4 sm:mb-6 w-full max-w-md">
             <button onClick={() => setShowCoopSetup(!showCoopSetup)}
-              className="w-full p-4 border font-mono text-sm transition-all"
+              className="w-full p-3 sm:p-4 border font-mono text-xs sm:text-sm transition-all active:scale-95"
               style={{
                 borderColor: coopRole !== 'none' ? '#76ff03' : 'rgba(118,255,3,0.2)',
                 backgroundColor: coopRole !== 'none' ? 'rgba(118,255,3,0.1)' : 'rgba(0,0,0,0.5)',
                 color: coopRole !== 'none' ? '#76ff03' : '#666',
+                minHeight: 44,
               }}>
               <div className="flex items-center justify-between">
                 <span className="font-bold">👥 MODO COOPERATIVO</span>
-                <span className="text-xs">{coopRole !== 'none' ? (coopRole === 'ear' ? 'EL OÍDO' : 'EL CUERPO') : 'OFF'}</span>
+                <span className="text-[10px] sm:text-xs">{coopRole !== 'none' ? (coopRole === 'ear' ? 'EL OÍDO' : 'EL CUERPO') : 'OFF'}</span>
               </div>
             </button>
 
@@ -800,37 +808,38 @@ export default function EchoGame() {
 
       {/* ===== CHAPTER SELECT ===== */}
       {gameState === 'chapterSelect' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10 px-4 overflow-y-auto">
-          <h2 className="text-2xl font-mono mb-2 tracking-widest" style={{ color: '#00e5ff' }}>CAPÍTULOS</h2>
-          <p className="font-mono text-[10px] mb-6 opacity-30" style={{ color: '#ffd700' }}>🏆 Complétalos en tiempo récord para ganar puntos y personajes exclusivos</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-4xl w-full mb-6">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10 px-3 sm:px-4 overflow-y-auto py-8">
+          <h2 className="text-xl sm:text-2xl font-mono mb-1 sm:mb-2 tracking-widest" style={{ color: '#00e5ff' }}>CAPÍTULOS</h2>
+          <p className="font-mono text-[9px] sm:text-[10px] mb-3 sm:mb-6 opacity-30" style={{ color: '#ffd700' }}>🏆 Complétalos en tiempo récord para ganar puntos y personajes exclusivos</p>
+          <div className="grid grid-cols-2 sm:grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 max-w-4xl w-full mb-4 sm:mb-6">
             {CHAPTERS.map(ch => {
               const unlocked = ch.id <= unlockedChapters;
               const challenge = SPEEDRUN_CHALLENGES.find(sc => sc.chapterId === ch.id);
               return (
                 <button key={ch.id} onClick={() => unlocked && setSelectedChapter(ch.id)} disabled={!unlocked}
-                  className="p-4 border font-mono text-left transition-all"
+                  className="p-2.5 sm:p-4 border font-mono text-left transition-all active:scale-95"
                   style={{
                     borderColor: selectedChapter === ch.id ? '#00e5ff' : unlocked ? 'rgba(0,229,255,0.15)' : 'rgba(50,50,50,0.3)',
                     backgroundColor: selectedChapter === ch.id ? 'rgba(0,229,255,0.08)' : 'rgba(0,0,0,0.5)',
                     color: selectedChapter === ch.id ? '#00e5ff' : unlocked ? '#888' : '#333',
                     opacity: unlocked ? 1 : 0.4,
+                    minHeight: 44,
                   }}>
-                  <div className="text-xs opacity-50 mb-1">{ch.subtitle}</div>
-                  <div className="text-sm font-bold mb-1">{unlocked ? ch.name : '???'}</div>
-                  <div className="text-[10px] opacity-50">{unlocked ? ch.description : 'Completa el capítulo anterior'}</div>
-                  {unlocked && <div className="text-[9px] mt-1 opacity-30">{ch.enemies.map(e => e.count).reduce((a,b) => a+b, 0)} entidades</div>}
+                  <div className="text-[9px] sm:text-xs opacity-50 mb-0.5 sm:mb-1">{ch.subtitle}</div>
+                  <div className="text-[11px] sm:text-sm font-bold mb-0.5 sm:mb-1">{unlocked ? ch.name : '???'}</div>
+                  <div className="text-[9px] sm:text-[10px] opacity-50 hidden sm:block">{unlocked ? ch.description : 'Completa el capítulo anterior'}</div>
+                  {unlocked && <div className="text-[8px] sm:text-[9px] mt-0.5 sm:mt-1 opacity-30">{ch.enemies.map(e => e.count).reduce((a,b) => a+b, 0)} entidades</div>}
                   {/* Speedrun challenge targets */}
                   {unlocked && challenge && (
-                    <div className="mt-2 pt-2 border-t" style={{ borderColor: 'rgba(255,215,0,0.1)' }}>
-                      <div className="text-[8px] opacity-40 mb-1" style={{ color: '#ffd700' }}>RETO DE VELOCIDAD</div>
+                    <div className="mt-1 sm:mt-2 pt-1 sm:pt-2 border-t" style={{ borderColor: 'rgba(255,215,0,0.1)' }}>
+                      <div className="text-[7px] sm:text-[8px] opacity-40 mb-0.5 sm:mb-1" style={{ color: '#ffd700' }}>RETO DE VELOCIDAD</div>
                       {challenge.rewards.map(r => {
                         const targetMins = Math.floor(r.timeLimitSeconds / 60);
                         const targetSecs = r.timeLimitSeconds % 60;
                         const targetStr = `${targetMins}:${targetSecs.toString().padStart(2, '0')}`;
                         const tierIcon = r.tier === 'gold' ? '🥇' : r.tier === 'silver' ? '🥈' : '🥉';
                         return (
-                          <div key={r.tier} className="text-[8px] opacity-35 flex items-center gap-1">
+                          <div key={r.tier} className="text-[7px] sm:text-[8px] opacity-35 flex items-center gap-1">
                             <span>{tierIcon}</span>
                             <span>&lt;{targetStr}</span>
                             <span style={{ color: r.tier === 'gold' ? '#ffd700' : r.tier === 'silver' ? '#c0c0c0' : '#cd7f32' }}>
@@ -846,7 +855,7 @@ export default function EchoGame() {
               );
             })}
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3 w-full max-w-sm px-2">
             <NeonButton onClick={() => handleStart(selectedChapter, difficulty, hardcoreMode, coopRole)}>JUGAR</NeonButton>
             <NeonButton onClick={() => setGameState('difficulty')} dim>VOLVER</NeonButton>
           </div>
@@ -855,10 +864,10 @@ export default function EchoGame() {
 
       {/* ===== CHAPTER INTRO ===== */}
       {gameState === 'chapterIntro' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10 px-8 animate-fade-in">
-          <div className="text-sm font-mono mb-2 tracking-widest" style={{ color: '#0097a7' }}>{CHAPTERS[selectedChapter - 1]?.subtitle}</div>
-          <h2 className="text-3xl md:text-5xl font-mono font-bold mb-6" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.4)' }}>{CHAPTERS[selectedChapter - 1]?.name}</h2>
-          <p className="font-mono text-sm max-w-lg text-center leading-relaxed" style={{ color: 'rgba(0,229,255,0.5)' }}>{CHAPTERS[selectedChapter - 1]?.introText}</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10 px-4 sm:px-8 animate-fade-in">
+          <div className="text-xs sm:text-sm font-mono mb-1 sm:mb-2 tracking-widest" style={{ color: '#0097a7' }}>{CHAPTERS[selectedChapter - 1]?.subtitle}</div>
+          <h2 className="text-2xl sm:text-3xl md:text-5xl font-mono font-bold mb-4 sm:mb-6" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.4)' }}>{CHAPTERS[selectedChapter - 1]?.name}</h2>
+          <p className="font-mono text-xs sm:text-sm max-w-sm sm:max-w-lg text-center leading-relaxed" style={{ color: 'rgba(0,229,255,0.5)' }}>{CHAPTERS[selectedChapter - 1]?.introText}</p>
           {/* Show speedrun targets during intro */}
           {(() => {
             const challenge = SPEEDRUN_CHALLENGES.find(sc => sc.chapterId === selectedChapter);
@@ -884,10 +893,10 @@ export default function EchoGame() {
               </div>
             );
           })()}
-          <div className="mt-8 font-mono text-xs opacity-30 animate-pulse">Pulsa ESPACIO para comenzar</div>
+          <div className="mt-6 sm:mt-8 font-mono text-[10px] sm:text-xs opacity-30 animate-pulse">Pulsa ESPACIO para comenzar</div>
           {isMobile && (
-            <button className="mt-4 px-8 py-4 font-mono text-sm tracking-widest border animate-pulse"
-              style={{ color: '#00e5ff', borderColor: 'rgba(0,229,255,0.4)', background: 'rgba(0,229,255,0.05)', minHeight: 48 }}
+            <button className="mt-3 sm:mt-4 px-6 sm:px-8 py-3 sm:py-4 font-mono text-xs sm:text-sm tracking-widest border animate-pulse"
+              style={{ color: '#00e5ff', borderColor: 'rgba(0,229,255,0.4)', background: 'rgba(0,229,255,0.05)', minHeight: 44 }}
               onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.startPlaying(); }}>
               TOCAR PARA COMENZAR
             </button>
@@ -913,9 +922,9 @@ export default function EchoGame() {
 
       {/* ===== PAUSED ===== */}
       {gameState === 'paused' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10">
-          <h2 className="text-3xl font-mono mb-8 tracking-widest" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>PAUSADO</h2>
-          <div className="flex flex-col gap-3">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10 px-4">
+          <h2 className="text-2xl sm:text-3xl font-mono mb-6 sm:mb-8 tracking-widest" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>PAUSADO</h2>
+          <div className="flex flex-col gap-2 sm:gap-3 w-full max-w-xs">
             <div className="animate-menu-appear" style={{ animationDelay: '0ms' }}>
               <NeonButton onClick={() => { const eng = engineRef.current; if (eng) eng.state = 'playing'; setGameState('playing'); }}>CONTINUAR</NeonButton>
             </div>
@@ -1081,15 +1090,15 @@ export default function EchoGame() {
       {gameState === 'dead' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10"
           style={{ background: 'radial-gradient(ellipse at center, rgba(20,0,0,0.9) 0%, rgba(0,0,0,0.98) 70%, rgba(0,0,0,1) 100%)' }}>
-          <h1 className="text-4xl md:text-6xl font-mono font-bold tracking-widest mb-4 animate-pulse"
+          <h1 className="text-2xl sm:text-4xl md:text-6xl font-mono font-bold tracking-widest mb-3 sm:mb-4 animate-pulse"
             style={{ color: '#ff1744', textShadow: '0 0 30px rgba(255,23,68,0.6), 0 0 60px rgba(255,0,0,0.3)' }}>
             HAS MUERTO
           </h1>
-          <div className="font-mono text-xs mb-8 text-center space-y-1" style={{ color: 'rgba(255,23,68,0.5)' }}>
+          <div className="font-mono text-[10px] sm:text-xs mb-6 sm:mb-8 text-center space-y-1" style={{ color: 'rgba(255,23,68,0.5)' }}>
             <p>Capitulo: {CHAPTERS[(engineLiveState.currentChapter || selectedChapter) - 1]?.name || '???'}</p>
             <p>Tiempo sobrevivido: {Math.floor(engineLiveState.playTimeSecs / 60)}m {engineLiveState.playTimeSecs % 60}s</p>
           </div>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 sm:gap-3 w-full max-w-xs px-4">
             <NeonButton onClick={() => { engineRef.current?.restartChapter(); }}>REINTENTAR</NeonButton>
             {saveExists && (
               <NeonButton onClick={() => {
@@ -1133,7 +1142,7 @@ export default function EchoGame() {
               }
             }
           }}>
-          <button className="px-8 py-4 font-mono text-sm tracking-widest border animate-pulse"
+          <button className="px-6 sm:px-8 py-3 sm:py-4 font-mono text-xs sm:text-sm tracking-widest border animate-pulse"
             style={{ color: '#76ff03', borderColor: 'rgba(118,255,3,0.4)', background: 'rgba(118,255,3,0.05)', minHeight: 48 }}>
             TOCAR PARA CONTINUAR
           </button>
@@ -1147,15 +1156,15 @@ export default function EchoGame() {
           {/* Scanline effect */}
           <div className="absolute inset-0 pointer-events-none opacity-20" style={{ backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,0,0,0.04) 2px,rgba(255,0,0,0.04) 4px)' }} />
 
-          <h1 className="text-4xl md:text-6xl font-mono font-bold tracking-widest mb-6 animate-pulse"
+          <h1 className="text-2xl sm:text-4xl md:text-6xl font-mono font-bold tracking-widest mb-4 sm:mb-6 animate-pulse"
             style={{ color: '#ff1744', textShadow: '0 0 40px rgba(255,23,68,0.8), 0 0 80px rgba(255,0,0,0.4)' }}>
             MUERTE PERMANENTE
           </h1>
-          <p className="font-mono text-lg md:text-xl mb-4 text-center px-8"
+          <p className="font-mono text-sm sm:text-lg md:text-xl mb-3 sm:mb-4 text-center px-4 sm:px-8"
             style={{ color: 'rgba(255,23,68,0.7)', textShadow: '0 0 20px rgba(255,23,68,0.3)' }}>
             Tu viaje termina aquí. La estática te consume.
           </p>
-          <p className="font-mono text-xs mb-8 opacity-30" style={{ color: '#ff1744' }}>
+          <p className="font-mono text-[10px] sm:text-xs mb-6 sm:mb-8 opacity-30" style={{ color: '#ff1744' }}>
             Todo el progreso se ha perdido
           </p>
           <button onClick={() => {
@@ -1291,11 +1300,12 @@ export default function EchoGame() {
 function NeonButton({ children, onClick, dim = false, isNew = false }: { children: React.ReactNode; onClick: () => void; dim?: boolean; isNew?: boolean }) {
   return (
     <button onClick={onClick}
-      className="px-8 py-3 font-mono text-sm tracking-widest border transition-all duration-300 hover:scale-105 active:scale-95"
+      className="px-5 sm:px-8 py-2.5 sm:py-3 font-mono text-xs sm:text-sm tracking-widest border transition-all duration-300 hover:scale-105 active:scale-95 w-full sm:w-auto"
       style={{
         color: dim ? '#555' : '#00e5ff',
         borderColor: dim ? 'rgba(100,100,100,0.2)' : 'rgba(0,229,255,0.25)',
         backgroundColor: dim ? 'rgba(0,0,0,0.3)' : 'rgba(0,229,255,0.03)',
+        minHeight: 44,
       }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = '#00e5ff'; e.currentTarget.style.boxShadow = '0 0 20px rgba(0,229,255,0.15)'; }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = dim ? 'rgba(100,100,100,0.2)' : 'rgba(0,229,255,0.25)'; e.currentTarget.style.boxShadow = 'none'; }}>
@@ -1341,12 +1351,13 @@ function SoundWaveButton({ children, onClick, dim = false, isNew = false, color 
 
   return (
     <button onClick={onClick}
-      className="sound-wave-btn relative px-8 py-3 font-mono text-sm tracking-widest border transition-all duration-300 hover:scale-105 active:scale-95 overflow-visible"
+      className="sound-wave-btn relative px-5 sm:px-8 py-2.5 sm:py-3 font-mono text-xs sm:text-sm tracking-widest border transition-all duration-300 hover:scale-105 active:scale-95 overflow-visible w-full"
       style={{
         color: dim ? '#555' : color,
         borderColor: dim ? 'rgba(100,100,100,0.2)' : `${color}40`,
         backgroundColor: dim ? 'rgba(0,0,0,0.3)' : `${color}0a`,
         textShadow: dim ? 'none' : `0 0 8px ${color}40`,
+        minHeight: 44,
       }}
       onMouseEnter={e => {
         e.currentTarget.style.borderColor = color;
