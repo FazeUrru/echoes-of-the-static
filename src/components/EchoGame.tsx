@@ -344,7 +344,7 @@ export default function EchoGame() {
                 }
                 j.dx = dx;
                 j.dy = dy;
-                eng.touchMoveX = dx / maxR; // -1 to 1, positive = right
+                eng.touchMoveX = -dx / maxR; // -1 to 1, positive = right (negated to match keyboard strafe convention)
                 eng.touchMoveY = -dy / maxR; // -1 to 1, positive = forward (up on screen = forward)
                 setJoystickPos({ dx, dy, active: true });
               }
