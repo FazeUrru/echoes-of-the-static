@@ -75,10 +75,7 @@ export default function LevelEditor({ onTestPlay, onExit }: LevelEditorProps) {
   const panStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
 
   // ---- UI state ----
-  const [savedLevels, setSavedLevels] = useState<CustomLevel[]>(() => {
-    if (typeof window === 'undefined') return [];
-    return getSavedLevels();
-  });
+  const [savedLevels, setSavedLevels] = useState<CustomLevel[]>(() => getSavedLevels());
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importText, setImportText] = useState('');

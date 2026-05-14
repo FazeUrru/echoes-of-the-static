@@ -1087,7 +1087,7 @@ export default function EchoGame() {
           })()}
           <div className="flex flex-col gap-3">
             <NeonButton onClick={() => { engineRef.current?.restartChapter(); }}>REINTENTAR</NeonButton>
-            {hasSave() && (
+            {saveExists && (
               <NeonButton onClick={() => {
                 const saved = loadGame();
                 if (saved) {
