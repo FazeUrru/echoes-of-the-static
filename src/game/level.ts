@@ -1,55 +1,27 @@
 // ============================================================
-// Echoes of the Static - Level Generator
+// Echoes of the Static - Level Generator v2.5
 // ============================================================
 
-import { CellType, GameMap, Vec2 } from './types';
+import { CellType, GameMap, Door, Vec2, Chapter, CHAPTERS, Difficulty, DIFFICULTY_CONFIGS } from './types';
+import { ITEM_SPAWN_TABLES, ITEM_BY_ID } from './items';
 
 interface Room {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  centerX: number;
-  centerY: number;
+  x: number; y: number; w: number; h: number;
+  centerX: number; centerY: number;
 }
 
 function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function randFloat(min: number, max: number): number {
-  return Math.random() * (max - min) + min;
-}
+export function generateLevel(chapterId: number, difficulty: Difficulty): GameMap {
+  const chapter = CHAPTERS.find(c => c.id === chapterId) || CHAPTERS[0];
+  const diffConfig = DIFFICULTY_CONFIGS[difficulty];
+  const width = chapter.mapWidth;
+  const height = chapter.mapHeight;
 
-export function generateLevel(
-  width: number,
-  height: number,
-  roomCount: number,
-  seed?: number
-): GameMap {
-  // Simple seeded random for reproducibility (optional)
-  if (seed !== undefined) {
-    let s = seed;
-    const origRandom = Math.random;
-    // Override Math.random with seeded version
-    (Math as unknown as Record<string, () => number>).random = () => {
-      s = (s * 16807 + 0) % 2147483647;
-      return (s - 1) / 2147483646;
-    };
-    const map = generateLevelInner(width, height, roomCount);
-    (Math as unknown as Record<string, () => number>).random = origRandom;
-    return map;
-  }
-  return generateLevelInner(width, height, roomCount);
-}
-
-function generateLevelInner(
-  width: number,
-  height: number,
-  roomCount: number
-): GameMap {
   // Initialize with all walls
-  const cells: CellType[][] = [];
+  const cells: number[][] = [];
   for (let y = 0; y < height; y++) {
     cells[y] = [];
     for (let x = 0; x < width; x++) {
@@ -59,39 +31,33 @@ function generateLevelInner(
 
   // Generate rooms
   const rooms: Room[] = [];
-  const maxAttempts = roomCount * 20;
+  const roomCount = Math.max(3, Math.floor(chapter.roomCount * diffConfig.itemSpawnRate));
+  const maxAttempts = roomCount * 30;
 
   for (let i = 0; i < maxAttempts && rooms.length < roomCount; i++) {
-    const w = randInt(4, 8);
-    const h = randInt(4, 8);
+    let w: number, h: number;
+    if (chapter.hasOutdoor && Math.random() < 0.3) {
+      // Outdoor areas are bigger
+      w = randInt(6, 14);
+      h = randInt(6, 14);
+    } else {
+      w = randInt(4, 8);
+      h = randInt(4, 8);
+    }
     const x = randInt(2, width - w - 2);
     const y = randInt(2, height - h - 2);
 
-    // Check for overlap with existing rooms (with padding)
     let overlaps = false;
     for (const room of rooms) {
-      if (
-        x - 1 < room.x + room.w + 1 &&
-        x + w + 1 > room.x - 1 &&
-        y - 1 < room.y + room.h + 1 &&
-        y + h + 1 > room.y - 1
-      ) {
+      if (x - 1 < room.x + room.w + 1 && x + w + 1 > room.x - 1 &&
+          y - 1 < room.y + room.h + 1 && y + h + 1 > room.y - 1) {
         overlaps = true;
         break;
       }
     }
 
     if (!overlaps) {
-      rooms.push({
-        x,
-        y,
-        w,
-        h,
-        centerX: Math.floor(x + w / 2),
-        centerY: Math.floor(y + h / 2),
-      });
-
-      // Carve room
+      rooms.push({ x, y, w, h, centerX: Math.floor(x + w / 2), centerY: Math.floor(y + h / 2) });
       for (let ry = y; ry < y + h; ry++) {
         for (let rx = x; rx < x + w; rx++) {
           cells[ry][rx] = 0;
@@ -100,145 +66,173 @@ function generateLevelInner(
     }
   }
 
-  // Connect rooms with corridors (L-shaped corridors)
+  // Connect rooms with corridors
   for (let i = 1; i < rooms.length; i++) {
-    const roomA = rooms[i - 1];
-    const roomB = rooms[i];
-
-    // Randomly go horizontal then vertical or vice versa
+    const a = rooms[i - 1], b = rooms[i];
     if (Math.random() < 0.5) {
-      carveHCorridor(cells, roomA.centerX, roomB.centerX, roomA.centerY);
-      carveVCorridor(cells, roomA.centerY, roomB.centerY, roomB.centerX);
+      carveH(cells, a.centerX, b.centerX, a.centerY);
+      carveV(cells, a.centerY, b.centerY, b.centerX);
     } else {
-      carveVCorridor(cells, roomA.centerY, roomB.centerY, roomA.centerX);
-      carveHCorridor(cells, roomA.centerX, roomB.centerX, roomB.centerY);
+      carveV(cells, a.centerY, b.centerY, a.centerX);
+      carveH(cells, a.centerX, b.centerX, b.centerY);
     }
   }
 
-  // Add some extra corridors for loops
-  for (let i = 0; i < Math.floor(roomCount / 2); i++) {
-    const roomA = rooms[randInt(0, rooms.length - 1)];
-    const roomB = rooms[randInt(0, rooms.length - 1)];
-    if (roomA !== roomB) {
+  // Extra corridors
+  for (let i = 0; i < Math.floor(roomCount / 3); i++) {
+    const a = rooms[randInt(0, rooms.length - 1)];
+    const b = rooms[randInt(0, rooms.length - 1)];
+    if (a !== b) {
       if (Math.random() < 0.5) {
-        carveHCorridor(cells, roomA.centerX, roomB.centerX, roomA.centerY);
-        carveVCorridor(cells, roomA.centerY, roomB.centerY, roomB.centerX);
+        carveH(cells, a.centerX, b.centerX, a.centerY);
+        carveV(cells, a.centerY, b.centerY, b.centerX);
       } else {
-        carveVCorridor(cells, roomA.centerY, roomB.centerY, roomA.centerX);
-        carveHCorridor(cells, roomA.centerX, roomB.centerX, roomB.centerY);
+        carveV(cells, a.centerY, b.centerY, a.centerX);
+        carveH(cells, a.centerX, b.centerX, b.centerY);
       }
     }
   }
 
-  // Place exit in the last room
-  const lastRoom = rooms[rooms.length - 1];
-  const exitPos: Vec2 = {
-    x: lastRoom.centerX + 0.5,
-    y: lastRoom.centerY + 0.5,
-  };
-  cells[lastRoom.centerY][lastRoom.centerX] = 2; // Exit marker
+  // Place doors between corridors and rooms
+  const doors: Door[] = [];
+  if (chapter.hasDoors) {
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        if (cells[y][x] !== 0) continue;
+        // Check for doorway patterns (narrow passage)
+        const isHorzPassage = cells[y][x - 1] === 0 && cells[y][x + 1] === 0 &&
+                               cells[y - 1][x] === 1 && cells[y + 1][x] === 1;
+        const isVertPassage = cells[y - 1][x] === 0 && cells[y + 1][x] === 0 &&
+                               cells[y][x - 1] === 1 && cells[y][x + 1] === 1;
 
-  // Create wall illumination map
-  const wallIllumination = new Map<string, {
-    intensity: number;
-    timestamp: number;
-    color: string;
-  }>();
-
-  return {
-    width,
-    height,
-    cells,
-    wallIllumination,
-    startRoom: rooms[0]
-      ? { x: rooms[0].x, y: rooms[0].y, w: rooms[0].w, h: rooms[0].h }
-      : { x: 5, y: 5, w: 5, h: 5 },
-    exitPos,
-  };
-}
-
-function carveHCorridor(
-  cells: CellType[][],
-  x1: number,
-  x2: number,
-  y: number
-) {
-  const startX = Math.min(x1, x2);
-  const endX = Math.max(x1, x2);
-  for (let x = startX; x <= endX; x++) {
-    if (y >= 0 && y < cells.length && x >= 0 && x < cells[0].length) {
-      if (cells[y][x] === 1) cells[y][x] = 0;
-    }
-  }
-}
-
-function carveVCorridor(
-  cells: CellType[][],
-  y1: number,
-  y2: number,
-  x: number
-) {
-  const startY = Math.min(y1, y2);
-  const endY = Math.max(y1, y2);
-  for (let y = startY; y <= endY; y++) {
-    if (y >= 0 && y < cells.length && x >= 0 && x < cells[0].length) {
-      if (cells[y][x] === 1) cells[y][x] = 0;
-    }
-  }
-}
-
-// Find a valid spawn position for entities (must be in open space, far from player)
-export function findEntitySpawnPositions(
-  map: GameMap,
-  count: number,
-  playerPos: Vec2,
-  minDist: number = 10
-): Vec2[] {
-  const openSpaces: Vec2[] = [];
-
-  for (let y = 1; y < map.height - 1; y++) {
-    for (let x = 1; x < map.width - 1; x++) {
-      if (map.cells[y][x] === 0) {
-        const dist = Math.sqrt(
-          (x + 0.5 - playerPos.x) ** 2 + (y + 0.5 - playerPos.y) ** 2
-        );
-        if (dist >= minDist) {
-          openSpaces.push({ x: x + 0.5, y: y + 0.5 });
+        if ((isHorzPassage || isVertPassage) && Math.random() < 0.15) {
+          cells[y][x] = 3; // Door cell
+          const isLocked = Math.random() < 0.2;
+          doors.push({
+            x, y,
+            isOpen: false,
+            isLocked,
+            keyId: isLocked ? ['key_rusty', 'key_sewer', 'key_hospital', 'keycard_blue'][randInt(0, 3)] : undefined,
+            health: 3,
+            side: isHorzPassage ? 0 : 1,
+          });
         }
       }
     }
   }
 
-  // Shuffle and pick
-  for (let i = openSpaces.length - 1; i > 0; i--) {
+  // Place exit
+  const lastRoom = rooms[rooms.length - 1];
+  const exitPos: Vec2 = { x: lastRoom.centerX + 0.5, y: lastRoom.centerY + 0.5 };
+  cells[lastRoom.centerY][lastRoom.centerX] = 2;
+
+  // Place items
+  const items: { itemId: string; pos: Vec2 }[] = [];
+  const spawnTable = ITEM_SPAWN_TABLES[chapter.mapType] || ITEM_SPAWN_TABLES.building;
+  const numItems = Math.floor(rooms.length * 1.5 * diffConfig.itemSpawnRate);
+
+  for (let i = 0; i < numItems; i++) {
+    const itemId = spawnTable[randInt(0, spawnTable.length - 1)];
+    const room = rooms[randInt(0, rooms.length - 1)];
+    const pos: Vec2 = {
+      x: room.x + 1 + Math.random() * (room.w - 2),
+      y: room.y + 1 + Math.random() * (room.h - 2),
+    };
+    // Verify walkable
+    if (isWalkable({ width, height, cells, startRoom: { x: 0, y: 0, w: 0, h: 0 }, exitPos: { x: 0, y: 0 }, doors, items: [], isOutdoor: false }, pos.x, pos.y)) {
+      items.push({ itemId, pos });
+    }
+  }
+
+  // Ensure flashlight in first room if chapter 1
+  if (chapterId === 1 && !items.some(it => it.itemId === 'flashlight')) {
+    const firstRoom = rooms[0];
+    items.push({
+      itemId: 'flashlight',
+      pos: { x: firstRoom.centerX + 0.5, y: firstRoom.centerY + 0.5 },
+    });
+  }
+
+  const isOutdoor = chapter.hasOutdoor;
+
+  return {
+    width, height, cells,
+    startRoom: rooms[0] ? { x: rooms[0].x, y: rooms[0].y, w: rooms[0].w, h: rooms[0].h } : { x: 5, y: 5, w: 5, h: 5 },
+    exitPos, doors, items, isOutdoor,
+  };
+}
+
+function carveH(cells: number[][], x1: number, x2: number, y: number) {
+  for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+    if (y >= 0 && y < cells.length && x >= 0 && x < cells[0].length) {
+      if (cells[y][x] === 1) cells[y][x] = 0;
+    }
+  }
+}
+
+function carveV(cells: number[][], y1: number, y2: number, x: number) {
+  for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+    if (y >= 0 && y < cells.length && x >= 0 && x < cells[0].length) {
+      if (cells[y][x] === 1) cells[y][x] = 0;
+    }
+  }
+}
+
+export function findEntitySpawnPositions(
+  map: GameMap, count: number, playerPos: Vec2, minDist: number = 8
+): Vec2[] {
+  const open: Vec2[] = [];
+  for (let y = 1; y < map.height - 1; y++) {
+    for (let x = 1; x < map.width - 1; x++) {
+      if (map.cells[y][x] === 0) {
+        const dist = Math.sqrt((x + 0.5 - playerPos.x) ** 2 + (y + 0.5 - playerPos.y) ** 2);
+        if (dist >= minDist) open.push({ x: x + 0.5, y: y + 0.5 });
+      }
+    }
+  }
+  for (let i = open.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [openSpaces[i], openSpaces[j]] = [openSpaces[j], openSpaces[i]];
+    [open[i], open[j]] = [open[j], open[i]];
   }
-
-  return openSpaces.slice(0, count);
+  return open.slice(0, count);
 }
 
-// Check if a position is walkable
 export function isWalkable(map: GameMap, x: number, y: number): boolean {
-  const mapX = Math.floor(x);
-  const mapY = Math.floor(y);
-  if (mapX < 0 || mapX >= map.width || mapY < 0 || mapY >= map.height) {
-    return false;
+  const mx = Math.floor(x), my = Math.floor(y);
+  if (mx < 0 || mx >= map.width || my < 0 || my >= map.height) return false;
+  const cell = map.cells[my][mx];
+  if (cell === 1) return false;
+  if (cell === 3) {
+    // Door - check if open
+    const door = map.doors.find(d => d.x === mx && d.y === my);
+    return door ? door.isOpen : false;
   }
-  return map.cells[mapY][mapX] !== 1;
+  return true;
 }
 
-// Check if a position is the exit
 export function isExit(map: GameMap, x: number, y: number): boolean {
-  const mapX = Math.floor(x);
-  const mapY = Math.floor(y);
-  if (mapX < 0 || mapX >= map.width || mapY < 0 || mapY >= map.height) {
-    return false;
-  }
-  return map.cells[mapY][mapX] === 2;
+  const mx = Math.floor(x), my = Math.floor(y);
+  if (mx < 0 || mx >= map.width || my < 0 || my >= map.height) return false;
+  return map.cells[my][mx] === 2;
 }
 
-// Get wall illumination key
+export function isDoor(map: GameMap, x: number, y: number): Door | null {
+  return map.doors.find(d => d.x === Math.floor(x) && d.y === Math.floor(y)) || null;
+}
+
 export function wallKey(x: number, y: number, side: number): string {
   return `${x},${y},${side}`;
+}
+
+export function findItemNearby(map: GameMap, x: number, y: number, radius: number = 1.5): { itemId: string; pos: Vec2; index: number } | null {
+  let closest: { itemId: string; pos: Vec2; index: number } | null = null;
+  let closestDist = radius;
+  map.items.forEach((item, index) => {
+    const dist = Math.sqrt((item.pos.x - x) ** 2 + (item.pos.y - y) ** 2);
+    if (dist < closestDist) {
+      closestDist = dist;
+      closest = { ...item, index };
+    }
+  });
+  return closest;
 }
