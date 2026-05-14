@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react';
 import { EchoGameEngine } from '@/game/engine';
-import { GameState, Difficulty, DIFFICULTY_CONFIGS, CHAPTERS, ProfileSettings, AdvancedSettings, DEFAULT_PROFILE, DEFAULT_ADVANCED, ControlBinding, DEFAULT_CONTROLS, SPEEDRUN_CHALLENGES } from '@/game/types';
+import { GameState, Difficulty, DIFFICULTY_CONFIGS, CHAPTERS, ProfileSettings, AdvancedSettings, DEFAULT_PROFILE, DEFAULT_ADVANCED, ControlBinding, DEFAULT_CONTROLS, SPEEDRUN_CHALLENGES, CoopRole, CustomLevel } from '@/game/types';
+import { saveGame, loadGame, hasSave, buildSaveData, deleteSave, SaveData } from '@/game/saveSystem';
+import LevelEditor from './LevelEditor';
 
 // ============================================================
-// Mobile detection hook
+// Hydration-safe hooks
 // ============================================================
 function useIsTouchDevice() {
   const [isTouch, setIsTouch] = useState(false);
@@ -22,6 +24,15 @@ function useIsTouchDevice() {
     return () => window.removeEventListener('resize', check);
   }, []);
   return isTouch;
+}
+
+function useMounted() {
+  // useSyncExternalStore is the React-recommended way to detect client-side rendering
+  return useSyncExternalStore(
+    () => () => {}, // subscribe (noop)
+    () => true,     // getSnapshot (client)
+    () => false     // getServerSnapshot (server)
+  );
 }
 
 // ============================================================
@@ -43,6 +54,25 @@ export default function EchoGame() {
   const [remappingAction, setRemappingAction] = useState<string | null>(null);
   const [isStarted, setIsStarted] = useState(false);
   const isMobile = useIsTouchDevice();
+  const mounted = useMounted();
+
+  // ---- Hardcore / Coop / Mic state ----
+  const [hardcoreMode, setHardcoreMode] = useState(false);
+  const [showCoopSetup, setShowCoopSetup] = useState(false);
+  const [coopRole, setCoopRole] = useState<CoopRole>('none');
+  const [showMicConfirm, setShowMicConfirm] = useState(false);
+
+  // ---- Level Editor state ----
+  const [showLevelEditor, setShowLevelEditor] = useState(false);
+
+  // ---- Save system state ----
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<number | null>(null);
+  const [showAutoSaveNotice, setShowAutoSaveNotice] = useState(false);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [showStatsOverlay, setShowStatsOverlay] = useState(false);
+  const [saveExists, setSaveExists] = useState(false);
+  const [showSaveToast, setShowSaveToast] = useState(false);
+  const playTimeRef = useRef(0);
 
   // ---- Touch joystick state ----
   const joystickRef = useRef<{ active: boolean; touchId: number; cx: number; cy: number; dx: number; dy: number }>({
@@ -60,10 +90,80 @@ export default function EchoGame() {
   // ---- Joystick visual position (state for render) ----
   const [joystickPos, setJoystickPos] = useState({ dx: 0, dy: 0, active: false });
 
-  const handleStart = useCallback(async (chapterId: number, diff: Difficulty) => {
+  // ---- Engine live state (polling for zone warnings etc) ----
+  const [engineLiveState, setEngineLiveState] = useState({ isInSilentZone: false, isInWhiteNoiseZone: false, micEnabled: false, hardcoreMode: false, sonarMode: 'active' as 'active' | 'passive', coopRole: 'none' as import('@/game/types').CoopRole, pingCount: 0 });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const eng = engineRef.current;
+      if (eng && eng.state === 'playing') {
+        setEngineLiveState({
+          isInSilentZone: eng.isInSilentZone,
+          isInWhiteNoiseZone: eng.isInWhiteNoiseZone,
+          micEnabled: eng.micEnabled,
+          hardcoreMode: eng.hardcoreMode,
+          sonarMode: eng.sonarMode,
+          coopRole: eng.coopRole,
+          pingCount: eng.pingMarkers.length,
+        });
+      }
+    }, 200);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ---- Check save existence on mount ----
+  useEffect(() => {
+    setSaveExists(hasSave());
+  }, []);
+
+  // ---- Autosave timer (every 60 seconds during gameplay) ----
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const eng = engineRef.current;
+      if (eng && eng.state === 'playing') {
+        playTimeRef.current += 60;
+        const saveData = buildSaveData({
+          playerName: profile.playerName,
+          unlockedChapters,
+          currentChapter: eng.currentChapter,
+          difficulty: eng.difficulty,
+          hardcoreMode: eng.hardcoreMode,
+          coopRole: eng.coopRole,
+          profile: profile as unknown as Record<string, unknown>,
+          advanced: advanced as unknown as Record<string, unknown>,
+          controls: controls.map(c => ({ action: c.action, label: c.label, key: c.key })),
+          unlockedCharacters: Array.from(eng.unlockedCharacters || []),
+          bestTimes: Array.from(eng.bestChapterTimes?.entries?.() || []).map(([k, v]) => ({ chapterId: k, timeSeconds: v, difficulty: eng.difficulty })),
+          totalPoints: eng.totalPoints || 0,
+          playTime: playTimeRef.current,
+          customLevels: [],
+          achievements: [],
+        });
+        saveGame(saveData);
+        setLastAutoSaveTime(Date.now());
+        setSaveExists(true);
+        setShowAutoSaveNotice(true);
+        setTimeout(() => setShowAutoSaveNotice(false), 3000);
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [profile, advanced, controls, unlockedChapters]);
+
+  // ---- Track play time ----
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const eng = engineRef.current;
+      if (eng && eng.state === 'playing') {
+        playTimeRef.current += 1;
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleStart = useCallback(async (chapterId: number, diff: Difficulty, hardcore: boolean = false, role: CoopRole = 'none') => {
     const eng = engineRef.current;
     if (!eng) return;
-    await eng.startGame(chapterId, diff);
+    await eng.startGame(chapterId, diff, hardcore, role);
     setGameState('chapterIntro');
     // After 3 seconds, transition to playing (unless on mobile where user taps)
     setTimeout(() => {
@@ -119,8 +219,21 @@ export default function EchoGame() {
     setRemappingAction(null);
   }, []);
 
+  // Don't render interactive UI until client-side mounted (prevents hydration mismatch)
+  if (!mounted) {
+    return (
+      <div className="relative w-full h-screen bg-black overflow-hidden">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black">
+          <h1 className="text-5xl font-mono font-bold tracking-[0.3em]" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.5)' }}>ECHOES</h1>
+          <h2 className="text-2xl font-mono tracking-[0.2em] mt-2" style={{ color: '#0097a7' }}>OF THE STATIC</h2>
+          <div className="mt-4 font-mono text-xs opacity-30" style={{ color: '#0097a7' }}>Cargando...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div ref={containerRef} className="relative w-full h-screen bg-black overflow-hidden select-none game-container" style={{ cursor: gameState === 'playing' && !isMobile ? 'crosshair' : 'default' }}
+    <div ref={containerRef} className="relative w-full h-screen bg-black overflow-hidden select-none game-container" style={{ cursor: gameState === 'playing' && !isMobile ? 'crosshair' : 'default', boxShadow: gameState === 'playing' && engineLiveState.sonarMode === 'passive' ? 'inset 0 0 60px rgba(156,39,176,0.15)' : 'none' }}
       onClick={() => { if (gameState === 'playing' && !isMobile && canvasRef.current) canvasRef.current.requestPointerLock(); }}>
 
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }} />
@@ -276,8 +389,100 @@ export default function EchoGame() {
               onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.dropSelectedItem(); }}>
               ✕
             </button>
+            {/* Microphone toggle */}
+            <button className="touch-btn game-touch-btn game-touch-btn-sm"
+              onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); setShowMicConfirm(true); }}>
+              🎤
+            </button>
           </div>
         </div>
+      )}
+
+      {/* ===== MIC CONFIRMATION DIALOG ===== */}
+      {showMicConfirm && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-30">
+          <div className="p-6 border max-w-sm w-full mx-4" style={{ borderColor: 'rgba(0,229,255,0.3)', backgroundColor: 'rgba(0,0,0,0.9)' }}>
+            <h3 className="font-mono text-sm mb-3" style={{ color: '#00e5ff' }}>🎤 ACTIVAR MICRÓFONO</h3>
+            <p className="font-mono text-[10px] mb-4" style={{ color: '#888' }}>
+              Tu voz generará ruido en el juego. Las entidades te escucharán si hablas o gritas.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={async () => {
+                const eng = engineRef.current;
+                if (eng) {
+                  if (eng.micEnabled) {
+                    eng.disableMicrophone();
+                  } else {
+                    await eng.enableMicrophone();
+                  }
+                }
+                setShowMicConfirm(false);
+              }}
+                className="flex-1 py-2 font-mono text-xs border"
+                style={{ color: '#00e5ff', borderColor: 'rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.05)' }}>
+                {engineLiveState.micEnabled ? 'DESACTIVAR' : 'ACTIVAR'}
+              </button>
+              <button onClick={() => setShowMicConfirm(false)}
+                className="flex-1 py-2 font-mono text-xs border"
+                style={{ color: '#666', borderColor: '#333', background: 'rgba(0,0,0,0.3)' }}>
+                CANCELAR
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== ZONE WARNING INDICATORS ===== */}
+      {gameState === 'playing' && !engineLiveState.hardcoreMode && (
+        <>
+          {/* Sonar mode indicator */}
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 font-mono text-xs tracking-widest"
+            style={{
+              color: engineLiveState.sonarMode === 'active' ? '#00e5ff' : '#9c27b0',
+              textShadow: `0 0 10px ${engineLiveState.sonarMode === 'active' ? 'rgba(0,229,255,0.5)' : 'rgba(156,39,176,0.5)'}`,
+            }}>
+            SONAR: {engineLiveState.sonarMode === 'active' ? 'ACTIVO' : 'PASIVO'}
+          </div>
+          {engineLiveState.isInSilentZone && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 font-mono text-sm tracking-widest animate-pulse"
+              style={{ color: '#9c27b0', textShadow: '0 0 10px rgba(156,39,176,0.5)' }}>
+              🔇 ZONA SILENCIOSA
+            </div>
+          )}
+          {engineLiveState.isInWhiteNoiseZone && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 font-mono text-sm tracking-widest animate-pulse"
+              style={{ color: '#ffffff', textShadow: '0 0 10px rgba(255,255,255,0.5)' }}>
+              📡 RUIDO BLANCO
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ===== CO-OP HUD ===== */}
+      {gameState === 'playing' && coopRole !== 'none' && (
+        <>
+          {/* Role indicator at top */}
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 font-mono text-xs tracking-widest"
+            style={{
+              color: coopRole === 'ear' ? '#76ff03' : '#ff6d00',
+              textShadow: `0 0 10px ${coopRole === 'ear' ? 'rgba(118,255,3,0.5)' : 'rgba(255,109,0,0.5)'}`,
+            }}>
+            {coopRole === 'ear' ? '👂 MODO OÍDO - Usa T para hacer ping' : '🏃 MODO CUERPO - Sigue los pings'}
+          </div>
+          {/* Ping count and active pings list */}
+          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-20 font-mono text-[10px] text-center"
+            style={{ color: 'rgba(0,229,255,0.5)' }}>
+            {engineLiveState.pingCount} pings activos
+          </div>
+          {/* Ping touch button for mobile (ear role only) */}
+          {isMobile && coopRole === 'ear' && (
+            <button className="touch-btn absolute top-1/2 right-3 -translate-y-1/2 z-20 game-touch-btn game-touch-btn-md"
+              style={{ borderColor: 'rgba(118,255,3,0.5)', color: '#76ff03', background: 'rgba(118,255,3,0.05)' }}
+              onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.addCoopPing(); }}>
+              PING
+            </button>
+          )}
+        </>
       )}
 
       {/* ===== PAUSE BUTTON (Top Right) ===== */}
@@ -312,13 +517,58 @@ export default function EchoGame() {
           </div>
 
           <div className="flex flex-col gap-3 mb-8">
+            {saveExists && (() => {
+              const saved = loadGame();
+              if (!saved) return null;
+              const ago = Math.floor((Date.now() - saved.timestamp) / 60000);
+              const agoStr = ago < 1 ? 'Ahora' : ago < 60 ? `Hace ${ago}m` : `Hace ${Math.floor(ago / 60)}h`;
+              return (
+                <button
+                  onClick={() => {
+                    setDifficulty(saved.difficulty as Difficulty);
+                    setSelectedChapter(saved.currentChapter);
+                    setUnlockedChapters(saved.unlockedChapters);
+                    setHardcoreMode(saved.hardcoreMode);
+                    setCoopRole(saved.coopRole as CoopRole);
+                    if (saved.profile) setProfile(saved.profile as unknown as ProfileSettings);
+                    if (saved.advanced) setAdvanced(saved.advanced as unknown as AdvancedSettings);
+                    if (saved.controls && Array.isArray(saved.controls)) setControls(saved.controls as ControlBinding[]);
+                    handleStart(saved.currentChapter, saved.difficulty as Difficulty, saved.hardcoreMode, saved.coopRole as CoopRole);
+                  }}
+                  className="px-8 py-3 font-mono text-sm tracking-widest border transition-all duration-300 hover:scale-105 active:scale-95 animate-menu-appear"
+                  style={{
+                    color: '#76ff03',
+                    borderColor: 'rgba(118,255,3,0.35)',
+                    backgroundColor: 'rgba(118,255,3,0.05)',
+                    textShadow: '0 0 10px rgba(118,255,3,0.3)',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#76ff03'; e.currentTarget.style.boxShadow = '0 0 20px rgba(118,255,3,0.15)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(118,255,3,0.35)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <span>CONTINUAR PARTIDA</span>
+                    <span className="animate-label-new text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.2)' }}>NUEVO</span>
+                  </span>
+                  <span className="block text-[9px] mt-1 opacity-60 font-mono">Guardado: {agoStr} | Cap. {saved.currentChapter} | {saved.difficulty}</span>
+                </button>
+              );
+            })()}
             <NeonButton onClick={() => { setIsStarted(true); setGameState('difficulty'); }}>NUEVA PARTIDA</NeonButton>
+            <NeonButton onClick={() => {
+              const eng = engineRef.current;
+              if (eng) {
+                eng.playCinematic(EchoGameEngine.TRAILER_CINEMATIC, () => {
+                  // Return to menu after trailer
+                });
+              }
+            }}>VER TRÁILER</NeonButton>
             <NeonButton onClick={() => setShowSettings(true)} dim>AJUSTES</NeonButton>
+            <NeonButton onClick={() => setShowLevelEditor(true)} dim isNew>EDITOR DE NIVELES</NeonButton>
           </div>
 
           <div className="font-mono text-[10px] text-center opacity-25 space-y-1" style={{ color: '#555' }}>
             <p>WASD: Mover | Ratón: Mirar | SHIFT: Sigilo | SPACE: Eco | F: Linterna</p>
-            <p>E: Interactuar | 1-4: Inventario | Q: Usar | G: Soltar | ESC: Pausa</p>
+            <p>E: Interactuar | 1-4: Inventario | Q: Usar | G: Soltar | R: Sonar | ESC: Pausa</p>
           </div>
           <div className="mt-4 font-mono text-[10px] opacity-20" style={{ color: '#0097a7' }}>🎧 Auriculares recomendados</div>
           <div className="mt-2 font-mono text-[9px] opacity-15" style={{ color: '#ffd700' }}>🏆 Complétalo rápido para desbloquear personajes exclusivos</div>
@@ -327,9 +577,9 @@ export default function EchoGame() {
 
       {/* ===== DIFFICULTY SELECT ===== */}
       {gameState === 'difficulty' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10 px-4">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10 px-4 overflow-y-auto">
           <h2 className="text-2xl font-mono mb-8 tracking-widest" style={{ color: '#00e5ff' }}>DIFICULTAD</h2>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 max-w-4xl w-full mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 max-w-4xl w-full mb-6">
             {(Object.entries(DIFFICULTY_CONFIGS) as [Difficulty, typeof DIFFICULTY_CONFIGS.medium][]).map(([key, cfg]) => (
               <button key={key} onClick={() => setDifficulty(key)}
                 className="p-4 border font-mono text-left transition-all hover:scale-105"
@@ -346,9 +596,76 @@ export default function EchoGame() {
               </button>
             ))}
           </div>
+
+          {/* Hardcore Mode Toggle */}
+          <div className="mb-6 w-full max-w-md">
+            <button onClick={() => setHardcoreMode(!hardcoreMode)}
+              className="w-full p-4 border font-mono text-sm transition-all"
+              style={{
+                borderColor: hardcoreMode ? '#ff1744' : 'rgba(255,23,68,0.2)',
+                backgroundColor: hardcoreMode ? 'rgba(255,23,68,0.1)' : 'rgba(0,0,0,0.5)',
+                color: hardcoreMode ? '#ff1744' : '#666',
+              }}>
+              <div className="flex items-center justify-between">
+                <span className="font-bold">☠️ MODO HARDCORE</span>
+                <span className="text-xs">{hardcoreMode ? 'ON' : 'OFF'}</span>
+              </div>
+              <div className="text-[10px] mt-1 opacity-60">⚠️ Una sola vida. Sin HUD. Solo audio binaural.</div>
+            </button>
+          </div>
+
+          {/* Co-op Mode */}
+          <div className="mb-6 w-full max-w-md">
+            <button onClick={() => setShowCoopSetup(!showCoopSetup)}
+              className="w-full p-4 border font-mono text-sm transition-all"
+              style={{
+                borderColor: coopRole !== 'none' ? '#76ff03' : 'rgba(118,255,3,0.2)',
+                backgroundColor: coopRole !== 'none' ? 'rgba(118,255,3,0.1)' : 'rgba(0,0,0,0.5)',
+                color: coopRole !== 'none' ? '#76ff03' : '#666',
+              }}>
+              <div className="flex items-center justify-between">
+                <span className="font-bold">👥 MODO COOPERATIVO</span>
+                <span className="text-xs">{coopRole !== 'none' ? (coopRole === 'ear' ? 'EL OÍDO' : 'EL CUERPO') : 'OFF'}</span>
+              </div>
+            </button>
+
+            {showCoopSetup && (
+              <div className="mt-3 p-4 border" style={{ borderColor: 'rgba(118,255,3,0.2)', backgroundColor: 'rgba(0,0,0,0.7)' }}>
+                <div className="text-[10px] font-mono mb-3" style={{ color: '#ff1744' }}>⚠️ Requiere comunicación por voz real</div>
+                <div className="flex flex-col gap-2 mb-3">
+                  <button onClick={() => setCoopRole('ear')}
+                    className="p-3 border font-mono text-xs text-left transition-all"
+                    style={{
+                      borderColor: coopRole === 'ear' ? '#76ff03' : 'rgba(118,255,3,0.2)',
+                      backgroundColor: coopRole === 'ear' ? 'rgba(118,255,3,0.1)' : 'rgba(0,0,0,0.3)',
+                      color: coopRole === 'ear' ? '#76ff03' : '#888',
+                    }}>
+                    👂 EL OÍDO (Ve el mapa)
+                  </button>
+                  <button onClick={() => setCoopRole('body')}
+                    className="p-3 border font-mono text-xs text-left transition-all"
+                    style={{
+                      borderColor: coopRole === 'body' ? '#76ff03' : 'rgba(118,255,3,0.2)',
+                      backgroundColor: coopRole === 'body' ? 'rgba(118,255,3,0.1)' : 'rgba(0,0,0,0.3)',
+                      color: coopRole === 'body' ? '#76ff03' : '#888',
+                    }}>
+                    🏃 EL CUERPO (Se mueve)
+                  </button>
+                </div>
+                {coopRole !== 'none' && (
+                  <button onClick={() => setShowCoopSetup(false)}
+                    className="w-full p-2 font-mono text-xs border"
+                    style={{ color: '#76ff03', borderColor: 'rgba(118,255,3,0.3)', background: 'rgba(118,255,3,0.05)' }}>
+                    CONFIRMAR ROL
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-3">
             <NeonButton onClick={() => setGameState('chapterSelect')}>SELECCIONAR CAPÍTULO</NeonButton>
-            <NeonButton onClick={() => { setGameState('menu'); setIsStarted(false); }} dim>VOLVER</NeonButton>
+            <NeonButton onClick={() => { setGameState('menu'); setIsStarted(false); setHardcoreMode(false); setCoopRole('none'); }} dim>VOLVER</NeonButton>
           </div>
         </div>
       )}
@@ -402,7 +719,7 @@ export default function EchoGame() {
             })}
           </div>
           <div className="flex gap-3">
-            <NeonButton onClick={() => handleStart(selectedChapter, difficulty)}>JUGAR</NeonButton>
+            <NeonButton onClick={() => handleStart(selectedChapter, difficulty, hardcoreMode, coopRole)}>JUGAR</NeonButton>
             <NeonButton onClick={() => setGameState('difficulty')} dim>VOLVER</NeonButton>
           </div>
         </div>
@@ -450,17 +767,108 @@ export default function EchoGame() {
         </div>
       )}
 
+      {/* ===== AUTOSAVE NOTIFICATION ===== */}
+      {showAutoSaveNotice && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 font-mono text-xs tracking-widest animate-save-flash"
+          style={{ color: 'rgba(0,229,255,0.8)', textShadow: '0 0 10px rgba(0,229,255,0.3)' }}>
+          Autoguardando...
+        </div>
+      )}
+
+      {/* ===== SAVE TOAST ===== */}
+      {showSaveToast && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 font-mono text-sm tracking-widest animate-save-flash px-6 py-3 border rounded"
+          style={{ color: '#76ff03', textShadow: '0 0 10px rgba(118,255,3,0.3)', borderColor: 'rgba(118,255,3,0.3)', backgroundColor: 'rgba(0,0,0,0.8)' }}>
+          Guardado
+        </div>
+      )}
+
       {/* ===== PAUSED ===== */}
       {gameState === 'paused' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10">
-          <h2 className="text-3xl font-mono mb-8 tracking-widest" style={{ color: '#00e5ff' }}>PAUSADO</h2>
+          <h2 className="text-3xl font-mono mb-8 tracking-widest" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>PAUSADO</h2>
           <div className="flex flex-col gap-3">
-            <NeonButton onClick={() => { const eng = engineRef.current; if (eng) eng.state = 'playing'; setGameState('playing'); }}>CONTINUAR</NeonButton>
-            <NeonButton onClick={() => setShowSettings(true)} dim>AJUSTES</NeonButton>
-            <NeonButton onClick={() => { setGameState('menu'); setIsStarted(false); }} dim>SALIR AL MENÚ</NeonButton>
+            <div className="animate-menu-appear" style={{ animationDelay: '0ms' }}>
+              <NeonButton onClick={() => { const eng = engineRef.current; if (eng) eng.state = 'playing'; setGameState('playing'); }}>CONTINUAR</NeonButton>
+            </div>
+            <div className="animate-menu-appear" style={{ animationDelay: '50ms' }}>
+              <NeonButton onClick={() => {
+                const eng = engineRef.current;
+                if (eng) {
+                  const saveData = buildSaveData({
+                    playerName: profile.playerName,
+                    unlockedChapters,
+                    currentChapter: eng.currentChapter,
+                    difficulty: eng.difficulty,
+                    hardcoreMode: eng.hardcoreMode,
+                    coopRole: eng.coopRole,
+                    profile: profile as unknown as Record<string, unknown>,
+                    advanced: advanced as unknown as Record<string, unknown>,
+                    controls: controls.map(c => ({ action: c.action, label: c.label, key: c.key })),
+                    unlockedCharacters: Array.from(eng.unlockedCharacters || []),
+                    bestTimes: Array.from(eng.bestChapterTimes?.entries?.() || []).map(([k, v]) => ({ chapterId: k, timeSeconds: v, difficulty: eng.difficulty })),
+                    totalPoints: eng.totalPoints || 0,
+                    playTime: playTimeRef.current,
+                    customLevels: [],
+                    achievements: [],
+                  });
+                  saveGame(saveData);
+                  setSaveExists(true);
+                  setLastAutoSaveTime(Date.now());
+                  setShowSaveToast(true);
+                  setTimeout(() => setShowSaveToast(false), 2000);
+                }
+              }} isNew>GUARDAR PARTIDA</NeonButton>
+            </div>
+            <div className="animate-menu-appear" style={{ animationDelay: '100ms' }}>
+              <NeonButton onClick={() => setShowSettings(true)} dim>AJUSTES</NeonButton>
+            </div>
+            <div className="animate-menu-appear" style={{ animationDelay: '150ms' }}>
+              <NeonButton onClick={() => setShowStatsOverlay(true)} dim isNew>ESTADISTICAS</NeonButton>
+            </div>
+            <div className="animate-menu-appear" style={{ animationDelay: '200ms' }}>
+              <NeonButton onClick={() => {
+                const eng = engineRef.current;
+                if (eng) {
+                  const saveData = buildSaveData({
+                    playerName: profile.playerName,
+                    unlockedChapters,
+                    currentChapter: eng.currentChapter,
+                    difficulty: eng.difficulty,
+                    hardcoreMode: eng.hardcoreMode,
+                    coopRole: eng.coopRole,
+                    profile: profile as unknown as Record<string, unknown>,
+                    advanced: advanced as unknown as Record<string, unknown>,
+                    controls: controls.map(c => ({ action: c.action, label: c.label, key: c.key })),
+                    unlockedCharacters: Array.from(eng.unlockedCharacters || []),
+                    bestTimes: Array.from(eng.bestChapterTimes?.entries?.() || []).map(([k, v]) => ({ chapterId: k, timeSeconds: v, difficulty: eng.difficulty })),
+                    totalPoints: eng.totalPoints || 0,
+                    playTime: playTimeRef.current,
+                    customLevels: [],
+                    achievements: [],
+                  });
+                  saveGame(saveData);
+                  setSaveExists(true);
+                }
+                setGameState('menu');
+                setIsStarted(false);
+                setHardcoreMode(false);
+                setCoopRole('none');
+              }} isNew>GUARDAR Y SALIR</NeonButton>
+            </div>
+            <div className="animate-menu-appear" style={{ animationDelay: '250ms' }}>
+              <NeonButton onClick={() => setShowSaveConfirm(true)} dim>SALIR SIN GUARDAR</NeonButton>
+            </div>
           </div>
+          {/* Autosave indicator */}
+          {lastAutoSaveTime && (
+            <div className="mt-6 font-mono text-[10px] tracking-widest animate-pulse-glow"
+              style={{ color: 'rgba(0,229,255,0.4)' }}>
+              Autoguardado: Hace {Math.floor((Date.now() - lastAutoSaveTime) / 60000)}m
+            </div>
+          )}
           {isMobile && (
-            <button className="mt-6 px-8 py-4 font-mono text-sm tracking-widest border"
+            <button className="mt-4 px-8 py-4 font-mono text-sm tracking-widest border"
               style={{ color: '#00e5ff', borderColor: 'rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.05)', minHeight: 48 }}
               onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); const eng = engineRef.current; if (eng) { eng.state = 'playing'; } setGameState('playing'); }}>
               TOCAR PARA CONTINUAR
@@ -469,18 +877,131 @@ export default function EchoGame() {
         </div>
       )}
 
-      {/* ===== DEAD SCREEN TOUCH ===== */}
-      {isMobile && gameState === 'dead' && (
+      {/* ===== SAVE CONFIRM DIALOG (Quit without saving) ===== */}
+      {showSaveConfirm && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-20">
+          <div className="p-6 border max-w-sm w-full mx-4" style={{ borderColor: 'rgba(255,23,68,0.3)', backgroundColor: 'rgba(0,0,0,0.95)' }}>
+            <h3 className="font-mono text-sm mb-3" style={{ color: '#ff1744' }}>SALIR SIN GUARDAR</h3>
+            <p className="font-mono text-[10px] mb-4" style={{ color: '#888' }}>
+              Seguro? Se perdera el progreso no guardado.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => {
+                setShowSaveConfirm(false);
+                setGameState('menu');
+                setIsStarted(false);
+                setHardcoreMode(false);
+                setCoopRole('none');
+              }}
+                className="flex-1 py-2 font-mono text-xs border"
+                style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.3)', background: 'rgba(255,23,68,0.05)' }}>
+                SI
+              </button>
+              <button onClick={() => setShowSaveConfirm(false)}
+                className="flex-1 py-2 font-mono text-xs border"
+                style={{ color: '#666', borderColor: '#333', background: 'rgba(0,0,0,0.3)' }}>
+                NO
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== STATS OVERLAY ===== */}
+      {showStatsOverlay && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/90 z-20">
+          <div className="p-6 border max-w-md w-full mx-4" style={{ borderColor: 'rgba(0,229,255,0.2)', backgroundColor: 'rgba(0,0,0,0.95)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-mono text-sm" style={{ color: '#00e5ff' }}>ESTADISTICAS</h3>
+              <button onClick={() => setShowStatsOverlay(false)} className="font-mono text-xs px-2 py-1 border" style={{ color: '#888', borderColor: '#333' }}>CERRAR</button>
+            </div>
+            {(() => {
+              const eng = engineRef.current;
+              const totalPlayMins = Math.floor(playTimeRef.current / 60);
+              const totalPlayHours = Math.floor(totalPlayMins / 60);
+              const playTimeStr = totalPlayHours > 0 ? `${totalPlayHours}h ${totalPlayMins % 60}m` : `${totalPlayMins}m`;
+              return (
+                <div className="space-y-3 font-mono">
+                  <div className="flex justify-between text-[11px]">
+                    <span style={{ color: '#888' }}>Tiempo jugado</span>
+                    <span style={{ color: '#00e5ff' }}>{playTimeStr}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span style={{ color: '#888' }}>Capitulos completados</span>
+                    <span style={{ color: '#00e5ff' }}>{Math.max(0, unlockedChapters - 1)} / 6</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span style={{ color: '#888' }}>Capitulo actual</span>
+                    <span style={{ color: '#00e5ff' }}>{eng?.currentChapter || selectedChapter}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span style={{ color: '#888' }}>Puntos totales</span>
+                    <span style={{ color: '#ffd600' }}>{eng?.totalPoints || 0}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span style={{ color: '#888' }}>Personajes desbloqueados</span>
+                    <span style={{ color: '#76ff03' }}>{(eng?.unlockedCharacters?.length || 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span style={{ color: '#888' }}>Dificultad</span>
+                    <span style={{ color: '#00e5ff' }}>{eng?.difficulty || difficulty}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span style={{ color: '#888' }}>Modo hardcore</span>
+                    <span style={{ color: eng?.hardcoreMode ? '#ff1744' : '#555' }}>{eng?.hardcoreMode ? 'ON' : 'OFF'}</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* ===== DEATH SCREEN ===== */}
+      {gameState === 'dead' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10"
-          onTouchStart={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            engineRef.current?.restartChapter();
-          }}>
-          <button className="px-8 py-4 font-mono text-sm tracking-widest border animate-pulse"
-            style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.4)', background: 'rgba(255,23,68,0.05)', minHeight: 48 }}>
-            TOCAR PARA REINTENTAR
-          </button>
+          style={{ background: 'radial-gradient(ellipse at center, rgba(20,0,0,0.9) 0%, rgba(0,0,0,0.98) 70%, rgba(0,0,0,1) 100%)' }}>
+          <h1 className="text-4xl md:text-6xl font-mono font-bold tracking-widest mb-4 animate-pulse"
+            style={{ color: '#ff1744', textShadow: '0 0 30px rgba(255,23,68,0.6), 0 0 60px rgba(255,0,0,0.3)' }}>
+            HAS MUERTO
+          </h1>
+          {(() => {
+            const eng = engineRef.current;
+            const chapName = CHAPTERS[(eng?.currentChapter || selectedChapter) - 1]?.name || '???';
+            const survivedSecs = playTimeRef.current;
+            const survivedMins = Math.floor(survivedSecs / 60);
+            return (
+              <div className="font-mono text-xs mb-8 text-center space-y-1" style={{ color: 'rgba(255,23,68,0.5)' }}>
+                <p>Capitulo: {chapName}</p>
+                <p>Tiempo sobrevivido: {survivedMins}m {survivedSecs % 60}s</p>
+              </div>
+            );
+          })()}
+          <div className="flex flex-col gap-3">
+            <NeonButton onClick={() => { engineRef.current?.restartChapter(); }}>REINTENTAR</NeonButton>
+            {hasSave() && (
+              <NeonButton onClick={() => {
+                const saved = loadGame();
+                if (saved) {
+                  setDifficulty(saved.difficulty as Difficulty);
+                  setSelectedChapter(saved.currentChapter);
+                  setUnlockedChapters(saved.unlockedChapters);
+                  setHardcoreMode(saved.hardcoreMode);
+                  setCoopRole(saved.coopRole as CoopRole);
+                  handleStart(saved.currentChapter, saved.difficulty as Difficulty, saved.hardcoreMode, saved.coopRole as CoopRole);
+                }
+              }} dim>CARGAR ULTIMO GUARDADO</NeonButton>
+            )}
+            <NeonButton onClick={() => { setGameState('menu'); setIsStarted(false); setHardcoreMode(false); setCoopRole('none'); }} dim>VOLVER AL MENU</NeonButton>
+          </div>
+          {/* Mobile touch */}
+          {isMobile && (
+            <button className="mt-6 px-8 py-4 font-mono text-sm tracking-widest border animate-pulse"
+              style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.4)', background: 'rgba(255,23,68,0.05)', minHeight: 48 }}
+              onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.restartChapter(); }}>
+              TOCAR PARA REINTENTAR
+            </button>
+          )}
         </div>
       )}
 
@@ -503,6 +1024,46 @@ export default function EchoGame() {
           <button className="px-8 py-4 font-mono text-sm tracking-widest border animate-pulse"
             style={{ color: '#76ff03', borderColor: 'rgba(118,255,3,0.4)', background: 'rgba(118,255,3,0.05)', minHeight: 48 }}>
             TOCAR PARA CONTINUAR
+          </button>
+        </div>
+      )}
+
+      {/* ===== PERMANENT DEATH SCREEN (Hardcore) ===== */}
+      {gameState === 'permanentDeath' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-10"
+          style={{ background: 'radial-gradient(ellipse at center, rgba(30,0,0,0.95) 0%, rgba(5,0,0,0.98) 70%, rgba(0,0,0,1) 100%)' }}>
+          {/* Scanline effect */}
+          <div className="absolute inset-0 pointer-events-none opacity-20" style={{ backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,0,0,0.04) 2px,rgba(255,0,0,0.04) 4px)' }} />
+
+          <h1 className="text-4xl md:text-6xl font-mono font-bold tracking-widest mb-6 animate-pulse"
+            style={{ color: '#ff1744', textShadow: '0 0 40px rgba(255,23,68,0.8), 0 0 80px rgba(255,0,0,0.4)' }}>
+            MUERTE PERMANENTE
+          </h1>
+          <p className="font-mono text-lg md:text-xl mb-4 text-center px-8"
+            style={{ color: 'rgba(255,23,68,0.7)', textShadow: '0 0 20px rgba(255,23,68,0.3)' }}>
+            Tu viaje termina aquí. La estática te consume.
+          </p>
+          <p className="font-mono text-xs mb-8 opacity-30" style={{ color: '#ff1744' }}>
+            Todo el progreso se ha perdido
+          </p>
+          <button onClick={() => {
+            const eng = engineRef.current;
+            if (eng) {
+              eng.hardcoreMode = false;
+              eng.currentChapter = 1;
+              eng.unlockedChapters = new Set([1]);
+              eng.totalPoints = 0;
+              eng.unlockedCharacters = [];
+              eng.bestChapterTimes = new Map();
+            }
+            setGameState('menu');
+            setIsStarted(false);
+            setHardcoreMode(false);
+            setCoopRole('none');
+          }}
+            className="px-8 py-4 font-mono text-sm tracking-widest border transition-all hover:scale-105"
+            style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.4)', background: 'rgba(255,23,68,0.05)' }}>
+            VOLVER AL MENÚ
           </button>
         </div>
       )}
@@ -590,6 +1151,23 @@ export default function EchoGame() {
           </div>
         </div>
       )}
+
+      {/* ===== LEVEL EDITOR ===== */}
+      {showLevelEditor && (
+        <LevelEditor
+          onTestPlay={async (level: CustomLevel) => {
+            const eng = engineRef.current;
+            if (eng) {
+              await eng.loadCustomLevel(level);
+              setGameState('playing');
+              setShowLevelEditor(false);
+            }
+          }}
+          onExit={() => {
+            setShowLevelEditor(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -598,7 +1176,7 @@ export default function EchoGame() {
 // Sub-components
 // ============================================================
 
-function NeonButton({ children, onClick, dim = false }: { children: React.ReactNode; onClick: () => void; dim?: boolean }) {
+function NeonButton({ children, onClick, dim = false, isNew = false }: { children: React.ReactNode; onClick: () => void; dim?: boolean; isNew?: boolean }) {
   return (
     <button onClick={onClick}
       className="px-8 py-3 font-mono text-sm tracking-widest border transition-all duration-300 hover:scale-105 active:scale-95"
@@ -609,7 +1187,12 @@ function NeonButton({ children, onClick, dim = false }: { children: React.ReactN
       }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = '#00e5ff'; e.currentTarget.style.boxShadow = '0 0 20px rgba(0,229,255,0.15)'; }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = dim ? 'rgba(100,100,100,0.2)' : 'rgba(0,229,255,0.25)'; e.currentTarget.style.boxShadow = 'none'; }}>
-      {children}
+      <span className="flex items-center justify-center gap-2">
+        {children}
+        {isNew && (
+          <span className="animate-label-new text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.2)' }}>NUEVO</span>
+        )}
+      </span>
     </button>
   );
 }

@@ -3,8 +3,8 @@
 // ============================================================
 
 export class AudioSystem {
-  private ctx: AudioContext | null = null;
-  private masterGain: GainNode | null = null;
+  ctx: AudioContext | null = null;
+  masterGain: GainNode | null = null;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private ambientNode: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
   private initialized = false;

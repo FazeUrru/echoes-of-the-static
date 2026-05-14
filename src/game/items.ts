@@ -21,6 +21,10 @@ export const ALL_ITEMS: ItemDef[] = [
   { id: 'rope', name: 'Cuerda', description: 'Permite descender por pozos y aberturas.', category: 'tool', rarity: UNCOMMON, stackable: false, maxStack: 1, icon: '🪢', effect: 'rope_descent', uses: 3 },
   { id: 'compass', name: 'Brújula', description: 'Mejora la precisión de la flecha de salida.', category: 'tool', rarity: COMMON, stackable: false, maxStack: 1, icon: '🧭', effect: 'compass_upgrade' },
   { id: 'night_visor', name: 'Visor Nocturno', description: 'Muestra siluetas de paredes cercanas siempre activo. Batería limitada.', category: 'tool', rarity: LEGENDARY, stackable: false, maxStack: 1, icon: '🥽', effect: 'night_vision', uses: 100 },
+  { id: 'passive_sonar', name: 'Sonar Pasivo', description: 'Ves poco, pero no haces ruido. Escaneo silencioso de los alrededores.', category: 'tool', rarity: RARE, stackable: false, maxStack: 1, icon: '🔬', effect: 'passive_sonar', uses: 30, noiseOnUse: 0, rangeOnUse: 8 },
+  { id: 'active_sonar', name: 'Sonar Activo', description: 'Ves mucho, pero atraes atención. Pulso poderoso que revela todo.', category: 'tool', rarity: RARE, stackable: false, maxStack: 1, icon: '📡', effect: 'active_sonar', uses: 10, noiseOnUse: 1.5, rangeOnUse: 25 },
+  { id: 'sonar_passive_module', name: 'Módulo Sonar Pasivo', description: 'Cambia tu sonar a modo pasivo. No emites ruido, pero ves menos.', category: 'tool', rarity: RARE, stackable: false, maxStack: 1, icon: '🔇', effect: 'passive_sonar_module', noiseOnUse: 0 },
+  { id: 'sonar_active_module', name: 'Módulo Sonar Activo', description: 'Cambia tu sonar de vuelta a modo activo. Pulso fuerte que revela todo.', category: 'tool', rarity: RARE, stackable: false, maxStack: 1, icon: '🔊', effect: 'active_sonar_module', noiseOnUse: 0.3, rangeOnUse: 3 },
 
   // ═══════════════ CONSUMABLES (15) ═══════════════
   { id: 'medkit', name: 'Botiquín', description: 'Restaura 30 de salud.', category: 'consumable', rarity: UNCOMMON, stackable: true, maxStack: 3, icon: '🩹', effect: 'heal', value: 30, noiseOnUse: 0.2, rangeOnUse: 2 },
@@ -38,6 +42,8 @@ export const ALL_ITEMS: ItemDef[] = [
   { id: 'bandage', name: 'Vendaje', description: 'Restaura 15 de salud. Silencioso.', category: 'consumable', rarity: COMMON, stackable: true, maxStack: 5, icon: '🩹', effect: 'heal', value: 15 },
   { id: 'herbal_tea', name: 'Té Herbal', description: 'Restaura resistencia y reduce ritmo cardíaco.', category: 'consumable', rarity: UNCOMMON, stackable: true, maxStack: 3, icon: '🍵', effect: 'calm', value: 40 },
   { id: 'mystery_pill', name: 'Pastilla Misteriosa', description: 'Efecto aleatorio. ¿Te atreves?', category: 'consumable', rarity: RARE, stackable: true, maxStack: 2, icon: '💊', effect: 'random' },
+  { id: 'echo_amplifier', name: 'Amplificador de Eco', description: 'Aumenta el radio del eco un 50% durante el nivel actual.', category: 'consumable', rarity: UNCOMMON, stackable: false, maxStack: 1, icon: '📢', effect: 'echo_amplifier', noiseOnUse: 0.1, rangeOnUse: 2 },
+  { id: 'sound_dampener_field', name: 'Campo Amortiguador', description: 'Crea una zona a tu alrededor que amortigua todo el ruido durante 30s.', category: 'consumable', rarity: RARE, stackable: false, maxStack: 1, icon: '🛑', effect: 'sound_dampener_field', noiseOnUse: 0 },
 
   // ═══════════════ KEYS (10) ═══════════════
   { id: 'key_rusty', name: 'Llave Oxidada', description: 'Abre puertas antiguas del edificio.', category: 'key', rarity: UNCOMMON, stackable: false, maxStack: 1, icon: '🗝️', effect: 'key_rusty' },
@@ -106,10 +112,10 @@ export const ITEM_BY_ID = (id: string) => ALL_ITEMS.find(i => i.id === id);
 
 // Items that spawn in each map type
 export const ITEM_SPAWN_TABLES: Record<string, string[]> = {
-  building: ['flashlight', 'batteries_small', 'bandage', 'food_can', 'water_bottle', 'throwing_rock', 'glass_bottle', 'chalk', 'carpet_piece', 'key_rusty', 'note_1', 'note_2', 'candle', 'glow_stick', 'cloth_strip', 'metal_scrap', 'lockpick', 'padded_shoes', 'tape_roll', 'note_5'],
+  building: ['flashlight', 'batteries_small', 'bandage', 'food_can', 'water_bottle', 'throwing_rock', 'glass_bottle', 'chalk', 'carpet_piece', 'key_rusty', 'note_1', 'note_2', 'candle', 'glow_stick', 'cloth_strip', 'metal_scrap', 'lockpick', 'padded_shoes', 'tape_roll', 'note_5', 'sonar_passive_module', 'echo_amplifier'],
   sewers: ['flashlight_battery', 'bandage', 'stamina_drink', 'throwing_rock', 'key_sewer', 'note_3', 'candle', 'cloth_strip', 'wax_earplugs', 'foam_pad', 'clockwork_toy', 'old_radio', 'note_4', 'sound_dampener', 'caffeine_pill'],
   street: ['throwing_rock', 'glass_bottle', 'food_can', 'water_bottle', 'key_street_gate', 'note_9', 'flare', 'firecracker', 'whistle', 'heavy_boots', 'thick_coat', 'chalk', 'carpet_piece', 'metal_scrap', 'batteries_small', 'compass'],
-  hospital: ['medkit', 'medkit_large', 'painkiller', 'adrenaline', 'antidote', 'key_hospital', 'keycard_blue', 'keycard_red', 'note_4', 'note_6', 'note_7', 'flashlight_battery', 'lockpick', 'shock_device', 'kevlar_vest'],
-  underground: ['flashlight_battery', 'medkit', 'key_ancient', 'note_8', 'note_10', 'note_11', 'radar_device', 'echolocator', 'smoke_bomb', 'sound_trap', 'rope', 'bolt_cutters', 'night_visor', 'prism'],
-  tower: ['medkit_large', 'key_tower', 'keycard_gold', 'note_11', 'note_12', 'shadow_cloak', 'sleeping_pill', 'adrenaline', 'shock_device', 'smoke_bomb', 'flare', 'firecracker', 'ancient_key', 'flashlight_battery'],
+  hospital: ['medkit', 'medkit_large', 'painkiller', 'adrenaline', 'antidote', 'key_hospital', 'keycard_blue', 'keycard_red', 'note_4', 'note_6', 'note_7', 'flashlight_battery', 'lockpick', 'shock_device', 'kevlar_vest', 'sonar_active_module', 'sound_dampener_field'],
+  underground: ['flashlight_battery', 'medkit', 'key_ancient', 'note_8', 'note_10', 'note_11', 'radar_device', 'echolocator', 'smoke_bomb', 'sound_trap', 'rope', 'bolt_cutters', 'night_visor', 'prism', 'sonar_passive_module', 'sonar_active_module', 'echo_amplifier', 'sound_dampener_field'],
+  tower: ['medkit_large', 'key_tower', 'keycard_gold', 'note_11', 'note_12', 'shadow_cloak', 'sleeping_pill', 'adrenaline', 'shock_device', 'smoke_bomb', 'flare', 'firecracker', 'ancient_key', 'flashlight_battery', 'sonar_passive_module', 'sonar_active_module', 'echo_amplifier', 'sound_dampener_field'],
 };

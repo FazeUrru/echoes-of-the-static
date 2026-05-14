@@ -2,7 +2,7 @@
 // Echoes of the Static - Level Generator v2.5
 // ============================================================
 
-import { GameMap, Door, Vec2, Chapter, CHAPTERS, Difficulty, DIFFICULTY_CONFIGS } from './types';
+import { GameMap, Door, Vec2, Chapter, CHAPTERS, Difficulty, DIFFICULTY_CONFIGS, CustomLevel, EditorCell } from './types';
 import { ITEM_SPAWN_TABLES, ITEM_BY_ID } from './items';
 
 interface Room {
@@ -139,17 +139,43 @@ export function generateLevel(chapterId: number, difficulty: Difficulty): GameMa
       y: room.y + 1 + Math.random() * (room.h - 2),
     };
     // Verify walkable
-    if (isWalkable({ width, height, cells, startRoom: { x: 0, y: 0, w: 0, h: 0 }, exitPos: { x: 0, y: 0 }, doors, items: [], isOutdoor: false }, pos.x, pos.y)) {
+    if (isWalkable({ width, height, cells, startRoom: { x: 0, y: 0, w: 0, h: 0 }, exitPos: { x: 0, y: 0 }, doors, items: [], isOutdoor: false, silentZones: [], whiteNoiseZones: [] }, pos.x, pos.y)) {
       items.push({ itemId, pos });
     }
   }
 
   const isOutdoor = chapter.hasOutdoor;
 
+  // Designate silent zones and white noise zones from rooms
+  const silentZones: { x: number; y: number; w: number; h: number }[] = [];
+  const whiteNoiseZones: { x: number; y: number; w: number; h: number }[] = [];
+
+  // Skip first room (start room) and last room (exit room)
+  const candidateRooms = rooms.slice(1, -1);
+  // Shuffle candidate rooms
+  for (let i = candidateRooms.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [candidateRooms[i], candidateRooms[j]] = [candidateRooms[j], candidateRooms[i]];
+  }
+
+  // Silent zones: ~15% of rooms, 1-2 per level
+  const silentCount = Math.min(candidateRooms.length, Math.max(1, Math.round(rooms.length * 0.15)));
+  for (let i = 0; i < silentCount && i < candidateRooms.length; i++) {
+    const room = candidateRooms[i];
+    silentZones.push({ x: room.x, y: room.y, w: room.w, h: room.h });
+  }
+
+  // White noise zones: ~10% of rooms, 1 per level
+  const wnStart = silentCount;
+  if (wnStart < candidateRooms.length) {
+    const room = candidateRooms[wnStart];
+    whiteNoiseZones.push({ x: room.x, y: room.y, w: room.w, h: room.h });
+  }
+
   return {
     width, height, cells,
     startRoom: rooms[0] ? { x: rooms[0].x, y: rooms[0].y, w: rooms[0].w, h: rooms[0].h } : { x: 5, y: 5, w: 5, h: 5 },
-    exitPos, doors, items, isOutdoor,
+    exitPos, doors, items, isOutdoor, silentZones, whiteNoiseZones,
   };
 }
 
@@ -226,4 +252,177 @@ export function findItemNearby(map: GameMap, x: number, y: number, radius: numbe
     }
   });
   return closest;
+}
+
+export function isInZone(pos: Vec2, zones: { x: number; y: number; w: number; h: number }[]): boolean {
+  for (const zone of zones) {
+    if (pos.x >= zone.x && pos.x <= zone.x + zone.w &&
+        pos.y >= zone.y && pos.y <= zone.y + zone.h) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ============================================================
+// Custom Level Conversion
+// ============================================================
+
+const CELL_TYPE_TO_NUM: Record<EditorCell['type'], number> = {
+  empty: 0,
+  wall: 1,
+  exit: 2,
+  door: 3,
+  silentZone: 0,  // silent zones are walkable empty cells marked as zones
+  whiteNoiseZone: 0, // white noise zones are walkable empty cells marked as zones
+};
+
+export function customLevelToGameMap(level: CustomLevel): GameMap {
+  const { width, height, cells, playerStart } = level;
+
+  // Convert cell types to numeric grid
+  const numericCells: number[][] = [];
+  const doors: Door[] = [];
+  const items: { itemId: string; pos: Vec2 }[] = [];
+  const silentZones: { x: number; y: number; w: number; h: number }[] = [];
+  const whiteNoiseZones: { x: number; y: number; w: number; h: number }[] = [];
+  let exitPos: Vec2 = { x: 0, y: 0 };
+
+  for (let y = 0; y < height; y++) {
+    numericCells[y] = [];
+    for (let x = 0; x < width; x++) {
+      const cell = cells[y][x];
+      numericCells[y][x] = CELL_TYPE_TO_NUM[cell.type];
+
+      // Track exit
+      if (cell.type === 'exit') {
+        exitPos = { x: x + 0.5, y: y + 0.5 };
+      }
+
+      // Create doors
+      if (cell.type === 'door') {
+        numericCells[y][x] = 3;
+        // Determine door side based on neighbors
+        const leftWall = x > 0 && cells[y][x - 1].type === 'wall';
+        const rightWall = x < width - 1 && cells[y][x + 1].type === 'wall';
+        const side = (leftWall || rightWall) ? 1 : 0;
+        doors.push({
+          x, y,
+          isOpen: false,
+          isLocked: false,
+          health: 3,
+          side,
+        });
+      }
+
+      // Track item spawns
+      if (cell.itemSpawn) {
+        items.push({
+          itemId: cell.itemSpawn,
+          pos: { x: x + 0.5, y: y + 0.5 },
+        });
+      }
+
+      // Silent and white noise zones are single cells - group adjacent ones
+      if (cell.type === 'silentZone') {
+        silentZones.push({ x, y, w: 1, h: 1 });
+      }
+      if (cell.type === 'whiteNoiseZone') {
+        whiteNoiseZones.push({ x, y, w: 1, h: 1 });
+      }
+    }
+  }
+
+  // Merge adjacent silent/whiteNoise zones into larger rectangles
+  const mergedSilentZones = mergeZones(silentZones);
+  const mergedWhiteNoiseZones = mergeZones(whiteNoiseZones);
+
+  // Start room around player start position
+  const startRoom = {
+    x: Math.max(0, playerStart.x - 2),
+    y: Math.max(0, playerStart.y - 2),
+    w: 5,
+    h: 5,
+  };
+
+  return {
+    width,
+    height,
+    cells: numericCells,
+    startRoom,
+    exitPos,
+    doors,
+    items,
+    isOutdoor: false,
+    silentZones: mergedSilentZones,
+    whiteNoiseZones: mergedWhiteNoiseZones,
+  };
+}
+
+/**
+ * Merge adjacent 1x1 zones into larger rectangular zones.
+ * Simple greedy approach: scan rows and merge horizontally adjacent cells,
+ * then try to merge vertically adjacent rectangles.
+ */
+function mergeZones(zones: { x: number; y: number; w: number; h: number }[]): { x: number; y: number; w: number; h: number }[] {
+  if (zones.length === 0) return [];
+
+  // Build a set for quick lookup
+  const zoneSet = new Set(zones.map(z => `${z.x},${z.y}`));
+
+  const visited = new Set<string>();
+  const merged: { x: number; y: number; w: number; h: number }[] = [];
+
+  for (const zone of zones) {
+    const key = `${zone.x},${zone.y}`;
+    if (visited.has(key)) continue;
+
+    // BFS/expand from this cell
+    let minX = zone.x, minY = zone.y, maxX = zone.x, maxY = zone.y;
+
+    // Try expanding right and down
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+
+      // Try expanding right
+      let canExpandRight = true;
+      for (let y = minY; y <= maxY; y++) {
+        if (!zoneSet.has(`${maxX + 1},${y}`)) { canExpandRight = false; break; }
+      }
+      if (canExpandRight) { maxX++; expanded = true; }
+
+      // Try expanding down
+      let canExpandDown = true;
+      for (let x = minX; x <= maxX; x++) {
+        if (!zoneSet.has(`${x},${maxY + 1}`)) { canExpandDown = false; break; }
+      }
+      if (canExpandDown) { maxY++; expanded = true; }
+
+      // Try expanding left
+      let canExpandLeft = true;
+      for (let y = minY; y <= maxY; y++) {
+        if (!zoneSet.has(`${minX - 1},${y}`)) { canExpandLeft = false; break; }
+      }
+      if (canExpandLeft) { minX--; expanded = true; }
+
+      // Try expanding up
+      let canExpandUp = true;
+      for (let x = minX; x <= maxX; x++) {
+        if (!zoneSet.has(`${x},${minY - 1}`)) { canExpandUp = false; break; }
+      }
+      if (canExpandUp) { minY--; expanded = true; }
+    }
+
+    // Mark all cells in the merged rectangle as visited
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        visited.add(`${x},${y}`);
+      }
+    }
+
+    merged.push({ x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 });
+  }
+
+  return merged;
 }

@@ -304,3 +304,55 @@ canvas {
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* ============================================================
+   Save System & Enhanced Menu Animations
+   ============================================================ */
+
+/* Brief white flash animation for save confirmation */
+@keyframes save-flash {
+  0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  70% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+}
+
+.animate-save-flash {
+  animation: save-flash 2.5s ease-out forwards;
+}
+
+/* Smooth slide-in from top for pause menu items */
+@keyframes menu-appear {
+  0% { opacity: 0; transform: translateY(-15px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-menu-appear {
+  animation: menu-appear 0.3s ease-out both;
+}
+
+/* Pulsing glow effect for autosave indicator */
+@keyframes pulse-glow-save {
+  0%, 100% { opacity: 0.4; text-shadow: 0 0 5px rgba(0,229,255,0.2); }
+  50% { opacity: 0.8; text-shadow: 0 0 15px rgba(0,229,255,0.5); }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow-save 2s ease-in-out infinite;
+}
+
+/* Animated "NUEVO" badge - bouncing/fading effect */
+@keyframes label-new {
+  0% { opacity: 0; transform: scale(0.5); }
+  20% { opacity: 1; transform: scale(1.2); }
+  40% { transform: scale(0.95); }
+  60% { transform: scale(1.05); }
+  80% { transform: scale(1); }
+  90% { opacity: 1; }
+  100% { opacity: 0.9; transform: scale(1); }
+}
+
+.animate-label-new {
+  animation: label-new 0.6s ease-out both;
+  display: inline-block;
+}

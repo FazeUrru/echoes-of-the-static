@@ -64,6 +64,8 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
 };
 
 // ---- Enemy Types ----
+export type SonarMode = 'passive' | 'active';
+
 export type EnemyType = 'stalker' | 'hunter' | 'phantom';
 
 export interface EnemyTemplate {
@@ -155,6 +157,7 @@ export interface Player {
   inventorySize: number;
   selectedSlot: number;
   interactCooldown: number;
+  hardcore?: boolean;
 }
 
 // ---- Entity ----
@@ -202,6 +205,7 @@ export interface Chapter {
   exitRequiredKey?: string;
   introText: string;
   outroText: string;
+  loreText: string[];
 }
 
 export const CHAPTERS: Chapter[] = [
@@ -213,6 +217,11 @@ export const CHAPTERS: Chapter[] = [
     itemDensity: 1.0, hasDoors: true, hasOutdoor: false,
     introText: 'No recuerdas cómo llegaste aquí. Solo silencio... y algo que se mueve en la oscuridad.',
     outroText: 'Encontraste la salida del edificio, pero la pesadilla apenas comienza.',
+    loreText: [
+      "Los primeros sujetos del Proyecto Eco fueron voluntarios... o eso les dijeron.",
+      "Los informes dicen que perdieron la vista al tercer día. Su audición se amplificó cien veces.",
+      "Sometido #7: 'Puedo oír las paredes respirar.'",
+    ],
   },
   {
     id: 2, name: 'Las Cloacas', subtitle: 'Capítulo 2',
@@ -222,6 +231,11 @@ export const CHAPTERS: Chapter[] = [
     itemDensity: 0.8, hasDoors: true, hasOutdoor: false,
     introText: 'El agua gotea constantemente. Cada gota es un sonido que te delata.',
     outroText: 'Las cloacas terminan en una salida a la superficie.',
+    loreText: [
+      "Las cloacas fueron el primer vertedero. Donde los ecos de los sujetos se mezclaron con las tuberías.",
+      "Nota encontrada: 'No están muertos. Están atrapados entre frecuencias.'",
+      "El agua conduce el sonido. El agua los conduce a ti.",
+    ],
   },
   {
     id: 3, name: 'Calles Vacías', subtitle: 'Capítulo 3',
@@ -231,6 +245,11 @@ export const CHAPTERS: Chapter[] = [
     itemDensity: 0.7, hasDoors: false, hasOutdoor: true,
     introText: 'La ciudad está vacía. Los edificios son sombras contra el cielo negro.',
     outroText: 'Encontraste refugio en un hospital abandonado.',
+    loreText: [
+      "Las calles estaban vacías pero no silenciosas. Los ecos de los sujetos resonaban entre los edificios.",
+      'Un grafiti dice: "SON PERSONAS. SON PERSONAS. SON PERSONAS."',
+      "Las entidades que vagan por las calles aún recuerdan los caminos a casa.",
+    ],
   },
   {
     id: 4, name: 'El Hospital', subtitle: 'Capítulo 4',
@@ -240,6 +259,11 @@ export const CHAPTERS: Chapter[] = [
     itemDensity: 0.9, hasDoors: true, hasOutdoor: false,
     introText: 'Los pasillos del hospital son un laberinto de ecos y susurros.',
     outroText: 'En el sótano del hospital descubres un pasaje subterráneo.',
+    loreText: [
+      "El Hospital Central fue donde empezó todo. El Proyecto Eco tenía aquí su sede.",
+      "Expediente #1138: 'Sujeto completamente ciego. Responde a estímulos sonoros con agresividad extrema.'",
+      "Las entidades del hospital son las más antiguas. Las más conscientes de lo que fueron.",
+    ],
   },
   {
     id: 5, name: 'Bajo Tierra', subtitle: 'Capítulo 5',
@@ -250,6 +274,11 @@ export const CHAPTERS: Chapter[] = [
     exitRequiredKey: 'ancient_key',
     introText: 'Los túneles son profundos y antiguos. Algo te observa desde las sombras.',
     outroText: 'Una escalera sube hacia lo que parece ser una torre.',
+    loreText: [
+      "Bajo la ciudad hay cámaras de resonancia. Los ecos duran años aquí.",
+      "Una inscripción en la pared: 'LOS QUE ESCUCHAN LA ESTÁTICA NUNCA DEJAN DE ESCUCHAR'",
+      "Los túneles conectan con el origen. La torre emite la frecuencia que los mantiene.",
+    ],
   },
   {
     id: 6, name: 'La Torre del Silencio', subtitle: 'Capítulo 6',
@@ -259,6 +288,11 @@ export const CHAPTERS: Chapter[] = [
     itemDensity: 0.5, hasDoors: true, hasOutdoor: true,
     introText: 'La torre se alza ante ti. La estática resuena en cada piedra.',
     outroText: 'El silencio regresa. La estática se desvanece. Sobreviviste.',
+    loreText: [
+      "La torre fue el último proyecto. Un intento de comunicación que abrió una grieta.",
+      "Registro final: 'La estática no es ruido. Es un millón de voces atrapadas pidiendo ayuda.'",
+      "Al apagar la torre, los liberarás... o los condenarás al silencio eterno.",
+    ],
   },
 ];
 
@@ -331,6 +365,8 @@ export const DEFAULT_CONTROLS: ControlBinding[] = [
   { action: 'useItem', label: 'Usar Objeto', key: 'KeyQ' },
   { action: 'dropItem', label: 'Soltar Objeto', key: 'KeyG' },
   { action: 'pause', label: 'Pausa', key: 'Escape' },
+  { action: 'sonarToggle', label: 'Cambiar Sonar', key: 'KeyR' },
+  { action: 'coopPing', label: 'Ping Co-op', key: 'KeyT' },
 ];
 
 export const DEFAULT_PROFILE: ProfileSettings = {
@@ -349,8 +385,18 @@ export const DEFAULT_ADVANCED: AdvancedSettings = {
   vsync: true,
 };
 
+// ---- Co-op Role ----
+export type CoopRole = 'none' | 'ear' | 'body';
+
+// ---- Ping Marker (Co-op) ----
+export interface PingMarker {
+  pos: Vec2;
+  time: number;
+  id: number;
+}
+
 // ---- Game State ----
-export type GameState = 'menu' | 'difficulty' | 'chapterSelect' | 'playing' | 'dead' | 'won' | 'paused' | 'settings' | 'inventory' | 'chapterIntro';
+export type GameState = 'menu' | 'difficulty' | 'chapterSelect' | 'playing' | 'dead' | 'won' | 'paused' | 'settings' | 'inventory' | 'chapterIntro' | 'coopSetup' | 'permanentDeath' | 'levelEditor';
 
 export interface GameMap {
   width: number;
@@ -361,6 +407,8 @@ export interface GameMap {
   doors: Door[];
   items: { itemId: string; pos: Vec2; }[];
   isOutdoor: boolean;
+  silentZones: { x: number; y: number; w: number; h: number }[];
+  whiteNoiseZones: { x: number; y: number; w: number; h: number }[];
 }
 
 // ---- Ray Hit ----
@@ -389,6 +437,8 @@ export const NEON_COLORS = {
   pulse: '#00e5ff',
   flashlight: '#ffe082',
   item: '#ffd600',
+  silentZone: '#1a0033',
+  whiteNoiseZone: '#ffffff',
 } as const;
 
 export const FADE_DURATION = 2500;
@@ -469,3 +519,31 @@ export interface UnlockedCharacter {
 
 export const AMBIENT_LIGHT_RADIUS = 3.5;
 export const AMBIENT_LIGHT_INTENSITY = 0.07;
+
+// ---- Level Editor ----
+export interface EditorCell {
+  type: 'empty' | 'wall' | 'exit' | 'door' | 'silentZone' | 'whiteNoiseZone';
+  acousticProperty: 'normal' | 'echo' | 'absorb' | 'reflect';
+  entitySpawn?: EnemyType;
+  itemSpawn?: string;
+}
+
+export interface CustomLevel {
+  name: string;
+  width: number;
+  height: number;
+  cells: EditorCell[][];
+  playerStart: Vec2;
+  acousticProfile: {
+    globalEcho: number; // 0-1
+    globalAbsorption: number; // 0-1
+    globalReflection: number; // 0-1
+  };
+}
+
+export const ACOUSTIC_LABELS: Record<string, { label: string; description: string; color: string }> = {
+  normal: { label: 'Normal', description: 'Sin propiedades acústicas especiales', color: '#00e5ff' },
+  echo: { label: 'Eco', description: 'Los sonidos reverberan, iluminación amplificada', color: '#ff6d00' },
+  absorb: { label: 'Absorción', description: 'Los sonidos se absorben, iluminación reducida', color: '#1a0033' },
+  reflect: { label: 'Reflexión', description: 'Los sonidos rebotan, iluminación en múltiples direcciones', color: '#ffd600' },
+};

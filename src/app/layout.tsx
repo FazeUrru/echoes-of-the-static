@@ -55,6 +55,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-hidden`}
         style={{ margin: 0, padding: 0, background: '#000' }}
+        suppressHydrationWarning
       >
         {children}
         <Toaster />

@@ -94,3 +94,95 @@ Stage Summary:
 - PWA enables offline installation and play without internet
 - Desktop keyboard/mouse controls remain unchanged
 - All lint checks pass, dev server compiles successfully
+
+---
+Task ID: 1
+Agent: main
+Task: Redesign entity rendering to make monsters actually scary (replace stick figures with detailed procedural drawings)
+
+Work Log:
+- Read and analyzed the existing renderEntities method (lines 2212-2401) in engine.ts
+- Identified the simple stick figure rendering: head ellipse, body line, arm lines, leg lines, eye dots
+- Identified the ENEMY_TEMPLATES structure with color/glowColor/eyeColor per entity type
+- Identified Entity interface with type, animPhase, state, and other properties
+- Replaced the entire drawing code section (lines 2334-2398) with detailed per-type monster rendering
+- Kept all illumination calculation code (pulses, flashlight, flares, wall illumination) completely unchanged
+- Kept ctx.save()/ctx.restore(), globalAlpha, shadow/glow effects approach unchanged
+
+**STALKER (red neon, #ff1744)**:
+- 1.3x scale tall emaciated humanoid with shifted baseY
+- Tilted oblong head with subtle sway animation
+- Jagged lipless mouth (zigzag line, wider when chasing)
+- 3-4 scattered eyes (asymmetric placement, more appear at closer detail levels)
+- Crooked neck with 2-4 visible vertebrae segments
+- Spine line with subtle sway
+- Ribcage with 3-5 curved ribs (detail-dependent)
+- Pulsing red glow inside torso (heart of darkness effect)
+- Asymmetric arms with 3 joints each (shoulder → elbow → extra bend → wrist)
+- 4 spindly fingers per hand with individual twitch animations
+- Dripping tendrils from arms and back (3-6 based on state)
+- Digitigrade legs (backwards-bending knees)
+- Chase state: contortion lines across torso, extra flailing tendrils
+
+**HUNTER (orange neon, #ff6d00)**:
+- 0.85x scale shorter, wider quadrupedal beast stance
+- Hunched back curve with 3-6 spine ridge bumps (triangular)
+- Ridges glow brighter when chasing (switch to glowColor)
+- Low-forward head with skull ellipse
+- Wide jaw that opens significantly when chasing
+- Triangular teeth (4-6 upper and lower, larger when chasing)
+- Single glowing "sound receptor" organ on forehead instead of eyes
+- Receptor has pulsing concentric rings (sonar effect)
+- Muscular shoulder ellipses with 3 spike protrusions each
+- Forelimbs with 3 claws per paw (extend when chasing)
+- Hind legs with visible knee joints
+- Tail with barbed tip (multiple barbs)
+- Chase state: drool/saliva tendrils from jaw
+
+**PHANTOM (purple neon, #aa00ff)**:
+- Static/noise particles floating around (10-20, flickering)
+- Smooth oval mask face with phase-shift flickering
+- Two elongated horizontal eye slits (wider when chasing)
+- Mask cracks when chasing (4 crack lines radiating outward)
+- Amorphous body with 12-segment undulating edges
+- Phase-shift: body parts disappear and reappear
+- Gaps/holes in body using destination-out composite (negative space)
+- Floating above ground with wisp trails for legs
+- Wisp particles at bottom
+- 3-6 tendrils/ribbons from shoulders and head (bezier curves)
+- Inner body glow (ethereal core, pulsing)
+
+**Shared features**:
+- detailLevel system: dist < 4 → level 3, dist < 8 → level 2, else level 1
+- chaseFactor: interpolates detail intensity based on entity state
+- All animations use entity.animPhase for continuous movement
+- Entity state affects rendering: chase → more detail, wider mouths, glowing parts
+- Distance-based LOD: far = simpler silhouette, close = full detail
+- Neon glow maintained with shadowColor/shadowBlur throughout
+- Illumination/alpha system completely preserved
+
+Stage Summary:
+- Replaced simple stick figure rendering with 3 distinct, terrifying monster designs
+- Stalker: tall emaciated humanoid with vertebrae, ribcage, digitigrade legs, dripping tendrils
+- Hunter: crouched quadrupedal beast with spine ridges, toothy jaw, sound receptor, claws, tail
+- Phantom: amorphous floating form with mask, undulating edges, void holes, wisps, particles
+- All 3 monsters have state-dependent animations (chase = more aggressive/detailed)
+- Distance-based LOD system ensures performance and appropriate detail
+- ESLint passes, dev server compiles successfully
+
+---
+Task ID: 5
+Agent: main
+Task: Fix ECMAScript duplicate variable error in LevelEditor.tsx
+
+Work Log:
+- Identified duplicate `savedLevels`/`setSavedLevels` useState declarations in LevelEditor.tsx (line 78 and line 89)
+- Merged into single useState with lazy initializer that reads from localStorage on mount
+- Verified dev server returns 200 after fix
+- Verified ESLint passes with no errors
+- All previously implemented features intact: v2.0-v3.5 (silent zones, white noise, sonar modes, co-op, level editor, mic, hardcore mode, monster redesign, touch controls, PWA)
+
+Stage Summary:
+- Fixed the only compile error blocking the application
+- Game now loads and runs correctly
+- All features from previous sessions are working
