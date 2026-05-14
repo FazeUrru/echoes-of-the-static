@@ -273,12 +273,11 @@ export default function EchoGame() {
 
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }} />
 
-      {/* ===== TOUCH LOOK AREA (canvas area for swiping) ===== */}
+      {/* ===== TOUCH LOOK AREA (Right half of screen for swiping to look) ===== */}
       {isMobile && gameState === 'playing' && (
-        <div className="absolute inset-0 z-5"
-          style={{ touchAction: 'none' }}
+        <div className="absolute top-0 right-0 bottom-0 z-5"
+          style={{ touchAction: 'none', width: '55%' }}
           onTouchStart={(e) => {
-            // Only track touches that aren't on joystick or buttons
             for (let i = 0; i < e.changedTouches.length; i++) {
               const t = e.changedTouches[i];
               const el = t.target as HTMLElement;
