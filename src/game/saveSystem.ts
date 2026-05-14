@@ -1,5 +1,3 @@
-'use client';
-
 export interface SaveData {
   version: string;
   timestamp: number;
@@ -46,6 +44,7 @@ function createDefaultSave(): SaveData {
 }
 
 export function saveGame(data: SaveData): void {
+  if (typeof window === 'undefined') return;
   try {
     data.version = SAVE_VERSION;
     data.timestamp = Date.now();
@@ -57,6 +56,7 @@ export function saveGame(data: SaveData): void {
 }
 
 export function loadGame(): SaveData | null {
+  if (typeof window === 'undefined') return null;
   try {
     const json = localStorage.getItem(SAVE_KEY);
     if (!json) return null;
@@ -71,6 +71,7 @@ export function loadGame(): SaveData | null {
 }
 
 export function deleteSave(): void {
+  if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(SAVE_KEY);
   } catch (e) {
@@ -83,6 +84,7 @@ export function autoSave(data: SaveData): void {
 }
 
 export function hasSave(): boolean {
+  if (typeof window === 'undefined') return false;
   try {
     return localStorage.getItem(SAVE_KEY) !== null;
   } catch {
@@ -91,6 +93,7 @@ export function hasSave(): boolean {
 }
 
 export function exportSave(): string {
+  if (typeof window === 'undefined') return '';
   try {
     const json = localStorage.getItem(SAVE_KEY);
     if (!json) return '';

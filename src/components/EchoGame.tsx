@@ -79,9 +79,23 @@ export default function EchoGame() {
   const [showAutoSaveNotice, setShowAutoSaveNotice] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [showStatsOverlay, setShowStatsOverlay] = useState(false);
-  const [saveExists, setSaveExists] = useState(false);
   const [showSaveToast, setShowSaveToast] = useState(false);
+  const [autoSaveAgoStr, setAutoSaveAgoStr] = useState('');
   const playTimeRef = useRef(0);
+
+  // ---- Initialize save data (safe because ssr: false ensures client-only) ----
+  const initialSave = (() => {
+    try {
+      if (!hasSave()) return { exists: false, data: null as SaveData | null, agoStr: '' };
+      const saved = loadGame();
+      if (!saved) return { exists: false, data: null as SaveData | null, agoStr: '' };
+      const ago = Math.floor((Date.now() - saved.timestamp) / 60000);
+      return { exists: true, data: saved, agoStr: ago < 1 ? 'Ahora' : ago < 60 ? `Hace ${ago}m` : `Hace ${Math.floor(ago / 60)}h` };
+    } catch { return { exists: false, data: null as SaveData | null, agoStr: '' }; }
+  })();
+  const [saveExists, setSaveExists] = useState(initialSave.exists);
+  const [cachedSave, setCachedSave] = useState<SaveData | null>(initialSave.data);
+  const [saveAgoStr, setSaveAgoStr] = useState(initialSave.agoStr);
 
   // ---- Touch joystick state ----
   const joystickRef = useRef<{ active: boolean; touchId: number; cx: number; cy: number; dx: number; dy: number }>({
@@ -100,12 +114,12 @@ export default function EchoGame() {
   const [joystickPos, setJoystickPos] = useState({ dx: 0, dy: 0, active: false });
 
   // ---- Engine live state (polling for zone warnings etc) ----
-  const [engineLiveState, setEngineLiveState] = useState({ isInSilentZone: false, isInWhiteNoiseZone: false, micEnabled: false, hardcoreMode: false, sonarMode: 'active' as 'active' | 'passive', coopRole: 'none' as import('@/game/types').CoopRole, pingCount: 0 });
+  const [engineLiveState, setEngineLiveState] = useState({ isInSilentZone: false, isInWhiteNoiseZone: false, micEnabled: false, hardcoreMode: false, sonarMode: 'active' as 'active' | 'passive', coopRole: 'none' as import('@/game/types').CoopRole, pingCount: 0, currentChapter: 1, totalPoints: 0, unlockedCharCount: 0, engineDifficulty: 'medium' as Difficulty, engineHardcore: false, playTimeSecs: 0 });
 
   useEffect(() => {
     const interval = setInterval(() => {
       const eng = engineRef.current;
-      if (eng && eng.state === 'playing') {
+      if (eng) {
         setEngineLiveState({
           isInSilentZone: eng.isInSilentZone,
           isInWhiteNoiseZone: eng.isInWhiteNoiseZone,
@@ -114,16 +128,28 @@ export default function EchoGame() {
           sonarMode: eng.sonarMode,
           coopRole: eng.coopRole,
           pingCount: eng.pingMarkers.length,
+          currentChapter: eng.currentChapter,
+          totalPoints: eng.totalPoints || 0,
+          unlockedCharCount: eng.unlockedCharacters?.length || 0,
+          engineDifficulty: eng.difficulty,
+          engineHardcore: eng.hardcoreMode,
+          playTimeSecs: playTimeRef.current,
         });
       }
     }, 200);
     return () => clearInterval(interval);
   }, []);
 
-  // ---- Check save existence on mount ----
+  // ---- Update autosave time display periodically ----
   useEffect(() => {
-    setSaveExists(hasSave());
-  }, []);
+    const interval = setInterval(() => {
+      if (lastAutoSaveTime) {
+        const ago = Math.floor((Date.now() - lastAutoSaveTime) / 60000);
+        setAutoSaveAgoStr(ago < 1 ? 'ahora' : `${ago}m`);
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [lastAutoSaveTime]);
 
   // ---- Autosave timer (every 60 seconds during gameplay) ----
   useEffect(() => {
@@ -546,31 +572,25 @@ export default function EchoGame() {
 
             {/* Interactive Menu Buttons with Sound Wave Effect */}
             <div className="flex flex-col gap-3 mb-8 w-full max-w-sm">
-              {saveExists && (() => {
-                const saved = loadGame();
-                if (!saved) return null;
-                const ago = Math.floor((Date.now() - saved.timestamp) / 60000);
-                const agoStr = ago < 1 ? 'Ahora' : ago < 60 ? `Hace ${ago}m` : `Hace ${Math.floor(ago / 60)}h`;
-                return (
-                  <SoundWaveButton onClick={() => {
-                    setDifficulty(saved.difficulty as Difficulty);
-                    setSelectedChapter(saved.currentChapter);
-                    setUnlockedChapters(saved.unlockedChapters);
-                    setHardcoreMode(saved.hardcoreMode);
-                    setCoopRole(saved.coopRole as CoopRole);
-                    if (saved.profile) setProfile(saved.profile as unknown as ProfileSettings);
-                    if (saved.advanced) setAdvanced(saved.advanced as unknown as AdvancedSettings);
-                    if (saved.controls && Array.isArray(saved.controls)) setControls(saved.controls as ControlBinding[]);
-                    handleStart(saved.currentChapter, saved.difficulty as Difficulty, saved.hardcoreMode, saved.coopRole as CoopRole);
-                  }} color="#76ff03">
-                    <span className="flex items-center justify-center gap-2">
-                      <span>CONTINUAR PARTIDA</span>
-                      <span className="animate-label-new text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.2)' }}>NUEVO</span>
-                    </span>
-                    <span className="block text-[9px] mt-1 opacity-60 font-mono">Guardado: {agoStr} | Cap. {saved.currentChapter} | {saved.difficulty}</span>
-                  </SoundWaveButton>
-                );
-              })()}
+              {saveExists && cachedSave && (
+                <SoundWaveButton onClick={() => {
+                  setDifficulty(cachedSave.difficulty as Difficulty);
+                  setSelectedChapter(cachedSave.currentChapter);
+                  setUnlockedChapters(cachedSave.unlockedChapters);
+                  setHardcoreMode(cachedSave.hardcoreMode);
+                  setCoopRole(cachedSave.coopRole as CoopRole);
+                  if (cachedSave.profile) setProfile(cachedSave.profile as unknown as ProfileSettings);
+                  if (cachedSave.advanced) setAdvanced(cachedSave.advanced as unknown as AdvancedSettings);
+                  if (cachedSave.controls && Array.isArray(cachedSave.controls)) setControls(cachedSave.controls as ControlBinding[]);
+                  handleStart(cachedSave.currentChapter, cachedSave.difficulty as Difficulty, cachedSave.hardcoreMode, cachedSave.coopRole as CoopRole);
+                }} color="#76ff03">
+                  <span className="flex items-center justify-center gap-2">
+                    <span>CONTINUAR PARTIDA</span>
+                    <span className="animate-label-new text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.2)' }}>NUEVO</span>
+                  </span>
+                  <span className="block text-[9px] mt-1 opacity-60 font-mono">Guardado: {saveAgoStr} | Cap. {cachedSave.currentChapter} | {cachedSave.difficulty}</span>
+                </SoundWaveButton>
+              )}
               <SoundWaveButton onClick={() => { setIsStarted(true); setGameState('difficulty'); }}>
                 NUEVA PARTIDA
               </SoundWaveButton>
@@ -969,10 +989,10 @@ export default function EchoGame() {
             </div>
           </div>
           {/* Autosave indicator */}
-          {lastAutoSaveTime && (
+          {lastAutoSaveTime && autoSaveAgoStr && (
             <div className="mt-6 font-mono text-[10px] tracking-widest animate-pulse-glow"
               style={{ color: 'rgba(0,229,255,0.4)' }}>
-              Autoguardado: Hace {Math.floor((Date.now() - lastAutoSaveTime) / 60000)}m
+              Autoguardado: Hace {autoSaveAgoStr}
             </div>
           )}
           {isMobile && (
@@ -1023,44 +1043,36 @@ export default function EchoGame() {
               <h3 className="font-mono text-sm" style={{ color: '#00e5ff' }}>ESTADISTICAS</h3>
               <button onClick={() => setShowStatsOverlay(false)} className="font-mono text-xs px-2 py-1 border" style={{ color: '#888', borderColor: '#333' }}>CERRAR</button>
             </div>
-            {(() => {
-              const eng = engineRef.current;
-              const totalPlayMins = Math.floor(playTimeRef.current / 60);
-              const totalPlayHours = Math.floor(totalPlayMins / 60);
-              const playTimeStr = totalPlayHours > 0 ? `${totalPlayHours}h ${totalPlayMins % 60}m` : `${totalPlayMins}m`;
-              return (
-                <div className="space-y-3 font-mono">
-                  <div className="flex justify-between text-[11px]">
-                    <span style={{ color: '#888' }}>Tiempo jugado</span>
-                    <span style={{ color: '#00e5ff' }}>{playTimeStr}</span>
-                  </div>
-                  <div className="flex justify-between text-[11px]">
-                    <span style={{ color: '#888' }}>Capitulos completados</span>
-                    <span style={{ color: '#00e5ff' }}>{Math.max(0, unlockedChapters - 1)} / 6</span>
-                  </div>
-                  <div className="flex justify-between text-[11px]">
-                    <span style={{ color: '#888' }}>Capitulo actual</span>
-                    <span style={{ color: '#00e5ff' }}>{eng?.currentChapter || selectedChapter}</span>
-                  </div>
-                  <div className="flex justify-between text-[11px]">
-                    <span style={{ color: '#888' }}>Puntos totales</span>
-                    <span style={{ color: '#ffd600' }}>{eng?.totalPoints || 0}</span>
-                  </div>
-                  <div className="flex justify-between text-[11px]">
-                    <span style={{ color: '#888' }}>Personajes desbloqueados</span>
-                    <span style={{ color: '#76ff03' }}>{(eng?.unlockedCharacters?.length || 0)}</span>
-                  </div>
-                  <div className="flex justify-between text-[11px]">
-                    <span style={{ color: '#888' }}>Dificultad</span>
-                    <span style={{ color: '#00e5ff' }}>{eng?.difficulty || difficulty}</span>
-                  </div>
-                  <div className="flex justify-between text-[11px]">
-                    <span style={{ color: '#888' }}>Modo hardcore</span>
-                    <span style={{ color: eng?.hardcoreMode ? '#ff1744' : '#555' }}>{eng?.hardcoreMode ? 'ON' : 'OFF'}</span>
-                  </div>
-                </div>
-              );
-            })()}
+            <div className="space-y-3 font-mono">
+              <div className="flex justify-between text-[11px]">
+                <span style={{ color: '#888' }}>Tiempo jugado</span>
+                <span style={{ color: '#00e5ff' }}>{(() => { const m = Math.floor(engineLiveState.playTimeSecs / 60); const h = Math.floor(m / 60); return h > 0 ? `${h}h ${m % 60}m` : `${m}m`; })()}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span style={{ color: '#888' }}>Capitulos completados</span>
+                <span style={{ color: '#00e5ff' }}>{Math.max(0, unlockedChapters - 1)} / 6</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span style={{ color: '#888' }}>Capitulo actual</span>
+                <span style={{ color: '#00e5ff' }}>{engineLiveState.currentChapter}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span style={{ color: '#888' }}>Puntos totales</span>
+                <span style={{ color: '#ffd600' }}>{engineLiveState.totalPoints}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span style={{ color: '#888' }}>Personajes desbloqueados</span>
+                <span style={{ color: '#76ff03' }}>{engineLiveState.unlockedCharCount}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span style={{ color: '#888' }}>Dificultad</span>
+                <span style={{ color: '#00e5ff' }}>{engineLiveState.engineDifficulty}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span style={{ color: '#888' }}>Modo hardcore</span>
+                <span style={{ color: engineLiveState.engineHardcore ? '#ff1744' : '#555' }}>{engineLiveState.engineHardcore ? 'ON' : 'OFF'}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1073,18 +1085,10 @@ export default function EchoGame() {
             style={{ color: '#ff1744', textShadow: '0 0 30px rgba(255,23,68,0.6), 0 0 60px rgba(255,0,0,0.3)' }}>
             HAS MUERTO
           </h1>
-          {(() => {
-            const eng = engineRef.current;
-            const chapName = CHAPTERS[(eng?.currentChapter || selectedChapter) - 1]?.name || '???';
-            const survivedSecs = playTimeRef.current;
-            const survivedMins = Math.floor(survivedSecs / 60);
-            return (
-              <div className="font-mono text-xs mb-8 text-center space-y-1" style={{ color: 'rgba(255,23,68,0.5)' }}>
-                <p>Capitulo: {chapName}</p>
-                <p>Tiempo sobrevivido: {survivedMins}m {survivedSecs % 60}s</p>
-              </div>
-            );
-          })()}
+          <div className="font-mono text-xs mb-8 text-center space-y-1" style={{ color: 'rgba(255,23,68,0.5)' }}>
+            <p>Capitulo: {CHAPTERS[(engineLiveState.currentChapter || selectedChapter) - 1]?.name || '???'}</p>
+            <p>Tiempo sobrevivido: {Math.floor(engineLiveState.playTimeSecs / 60)}m {engineLiveState.playTimeSecs % 60}s</p>
+          </div>
           <div className="flex flex-col gap-3">
             <NeonButton onClick={() => { engineRef.current?.restartChapter(); }}>REINTENTAR</NeonButton>
             {saveExists && (
