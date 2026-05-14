@@ -2,7 +2,7 @@
 // Echoes of the Static - Level Generator v2.5
 // ============================================================
 
-import { CellType, GameMap, Door, Vec2, Chapter, CHAPTERS, Difficulty, DIFFICULTY_CONFIGS } from './types';
+import { GameMap, Door, Vec2, Chapter, CHAPTERS, Difficulty, DIFFICULTY_CONFIGS } from './types';
 import { ITEM_SPAWN_TABLES, ITEM_BY_ID } from './items';
 
 interface Room {
@@ -142,15 +142,6 @@ export function generateLevel(chapterId: number, difficulty: Difficulty): GameMa
     if (isWalkable({ width, height, cells, startRoom: { x: 0, y: 0, w: 0, h: 0 }, exitPos: { x: 0, y: 0 }, doors, items: [], isOutdoor: false }, pos.x, pos.y)) {
       items.push({ itemId, pos });
     }
-  }
-
-  // Ensure flashlight in first room if chapter 1
-  if (chapterId === 1 && !items.some(it => it.itemId === 'flashlight')) {
-    const firstRoom = rooms[0];
-    items.push({
-      itemId: 'flashlight',
-      pos: { x: firstRoom.centerX + 0.5, y: firstRoom.centerY + 0.5 },
-    });
   }
 
   const isOutdoor = chapter.hasOutdoor;

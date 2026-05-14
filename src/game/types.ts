@@ -393,3 +393,79 @@ export const NEON_COLORS = {
 
 export const FADE_DURATION = 2500;
 export const PULSE_ANIM_DURATION = 800;
+
+// ---- Speedrun / Challenge System ----
+export interface SpeedrunReward {
+  tier: 'gold' | 'silver' | 'bronze';
+  timeLimitSeconds: number;
+  points: number;
+  characterName: string;
+  characterIcon: string;
+  characterDescription: string;
+}
+
+export interface ChapterChallenge {
+  chapterId: number;
+  rewards: SpeedrunReward[];
+}
+
+export const SPEEDRUN_CHALLENGES: ChapterChallenge[] = [
+  {
+    chapterId: 1,
+    rewards: [
+      { tier: 'gold', timeLimitSeconds: 90, points: 5000, characterName: 'El Primero', characterIcon: '👑', characterDescription: 'El primer superviviente. Nadie fue más rápido.' },
+      { tier: 'silver', timeLimitSeconds: 150, points: 2500, characterName: 'Sombra Rápida', characterIcon: '⚡', characterDescription: 'Veloz como el rayo entre las sombras.' },
+      { tier: 'bronze', timeLimitSeconds: 240, points: 1000, characterName: 'Explorador', characterIcon: '🧭', characterDescription: 'Conoces el edificio como nadie.' },
+    ],
+  },
+  {
+    chapterId: 2,
+    rewards: [
+      { tier: 'gold', timeLimitSeconds: 120, points: 6000, characterName: 'Hijo de las Cloacas', characterIcon: '🐀', characterDescription: 'Las alcantarillas son tu hogar.' },
+      { tier: 'silver', timeLimitSeconds: 180, points: 3000, characterName: 'Pescador de Ecos', characterIcon: '🎣', characterDescription: 'Los ecos te guían bajo tierra.' },
+      { tier: 'bronze', timeLimitSeconds: 300, points: 1200, characterName: 'Superviviente Fétido', characterIcon: '🦨', characterDescription: 'Sobreviviste a las aguas oscuras.' },
+    ],
+  },
+  {
+    chapterId: 3,
+    rewards: [
+      { tier: 'gold', timeLimitSeconds: 100, points: 7000, characterName: 'Fantasma Urbano', characterIcon: '🏙️', characterDescription: 'Las calles vacías son tu territorio.' },
+      { tier: 'silver', timeLimitSeconds: 170, points: 3500, characterName: 'Corredor Nocturno', characterIcon: '🏃', characterDescription: 'Nadie te ve, todos te escuchan.' },
+      { tier: 'bronze', timeLimitSeconds: 270, points: 1400, characterName: 'Cartógrafo', characterIcon: '🗺️', characterDescription: 'Cada calle es un mapa en tu mente.' },
+    ],
+  },
+  {
+    chapterId: 4,
+    rewards: [
+      { tier: 'gold', timeLimitSeconds: 130, points: 8000, characterName: 'El Cirujano', characterIcon: '🩺', characterDescription: 'Precisión quirúrgica en la oscuridad.' },
+      { tier: 'silver', timeLimitSeconds: 200, points: 4000, characterName: 'Paciente Cero', characterIcon: '🦠', characterDescription: 'Infecto pero no derrotado.' },
+      { tier: 'bronze', timeLimitSeconds: 330, points: 1600, characterName: 'Enfermero Nocturno', characterIcon: '💉', characterDescription: 'Curas heridas que nadie ve.' },
+    ],
+  },
+  {
+    chapterId: 5,
+    rewards: [
+      { tier: 'gold', timeLimitSeconds: 150, points: 10000, characterName: 'El Arqueólogo', characterIcon: '⛏️', characterDescription: 'Desenterraste secretos milenarios.' },
+      { tier: 'silver', timeLimitSeconds: 240, points: 5000, characterName: 'Espeleólogo', characterIcon: '🪨', characterDescription: 'Las cavernas no tienen secretos para ti.' },
+      { tier: 'bronze', timeLimitSeconds: 390, points: 2000, characterName: 'Topo', characterIcon: '🐾', characterDescription: 'Bajo tierra, eres imparable.' },
+    ],
+  },
+  {
+    chapterId: 6,
+    rewards: [
+      { tier: 'gold', timeLimitSeconds: 180, points: 15000, characterName: 'Silenciador', characterIcon: '🔇', characterDescription: 'CALLASTE LA ESTÁTICA. Leyenda absoluta.' },
+      { tier: 'silver', timeLimitSeconds: 300, points: 7500, characterName: 'Torreobrante', characterIcon: '🗼', characterDescription: 'La torre se inclina ante ti.' },
+      { tier: 'bronze', timeLimitSeconds: 480, points: 3000, characterName: 'Escalador', characterIcon: '🧗', characterDescription: 'Llegaste arriba. Muchos lo intentaron.' },
+    ],
+  },
+];
+
+export interface UnlockedCharacter {
+  chapterId: number;
+  tier: 'gold' | 'silver' | 'bronze';
+  characterName: string;
+  characterIcon: string;
+}
+
+export const AMBIENT_LIGHT_RADIUS = 3.5;
+export const AMBIENT_LIGHT_INTENSITY = 0.07;

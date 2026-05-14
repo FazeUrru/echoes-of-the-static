@@ -28,6 +28,11 @@ import {
   ItemDef,
   GameMap,
   EnemyType,
+  SPEEDRUN_CHALLENGES,
+  SpeedrunReward,
+  UnlockedCharacter,
+  AMBIENT_LIGHT_RADIUS,
+  AMBIENT_LIGHT_INTENSITY,
 } from './types';
 import {
   generateLevel,
@@ -96,6 +101,11 @@ export class EchoGameEngine {
 
   // ---- Progression ----
   unlockedChapters: Set<number> = new Set([1]);
+  totalPoints = 0;
+  unlockedCharacters: UnlockedCharacter[] = [];
+  lastCompletionTimeSeconds = 0;
+  lastReward: SpeedrunReward | null = null;
+  bestChapterTimes: Map<number, number> = new Map(); // chapterId -> best time in seconds
 
   // ---- Input ----
   keys: Set<string> = new Set();
@@ -187,6 +197,17 @@ export class EchoGameEngine {
     const sr = this.map.startRoom;
     const invSize = this.diffConfig.inventorySize;
 
+    // Give player starting flashlight
+    const flashlightDef = ITEM_BY_ID('flashlight');
+    const startingInventory: InventorySlot[] = [];
+    if (flashlightDef) {
+      startingInventory.push({
+        item: flashlightDef,
+        count: 1,
+        uses: flashlightDef.uses,
+      });
+    }
+
     this.player = {
       pos: { x: sr.x + sr.w / 2 + 0.5, y: sr.y + sr.h / 2 + 0.5 },
       dir: 0,
@@ -199,10 +220,10 @@ export class EchoGameEngine {
       maxStamina: 100,
       noiseLevel: 0,
       lastFootstepTime: 0,
-      flashlightOn: false,
+      flashlightOn: true, // Start with flashlight ON
       flashlightBattery: 100,
       maxFlashlightBattery: 100,
-      inventory: [],
+      inventory: startingInventory,
       inventorySize: invSize,
       selectedSlot: 0,
       interactCooldown: 0,
@@ -880,6 +901,7 @@ export class EchoGameEngine {
 
     this.updatePlayer(dt);
     this.updateFlashlight(dt);
+    this.updateAmbientLight();
     this.updateEntities(dt);
     this.updatePulses();
     this.updateFlares();
@@ -1676,6 +1698,37 @@ export class EchoGameEngine {
     }
   }
 
+  // ---- Ambient light: always a faint glow around the player ----
+  private updateAmbientLight() {
+    const p = this.player;
+    const radius = AMBIENT_LIGHT_RADIUS;
+    const intensity = AMBIENT_LIGHT_INTENSITY;
+    const minX = Math.max(0, Math.floor(p.pos.x - radius));
+    const maxX = Math.min(this.map.width - 1, Math.ceil(p.pos.x + radius));
+    const minY = Math.max(0, Math.floor(p.pos.y - radius));
+    const maxY = Math.min(this.map.height - 1, Math.ceil(p.pos.y + radius));
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const cell = this.map.cells[y][x];
+        if (cell !== 1 && cell !== 2 && cell !== 3) continue;
+        const dist = Math.sqrt((x + 0.5 - p.pos.x) ** 2 + (y + 0.5 - p.pos.y) ** 2);
+        if (dist <= radius) {
+          const distFade = 1 - dist / radius;
+          const ambIntensity = intensity * distFade;
+          for (let side = 0; side < 2; side++) {
+            const key = wallKey(x, y, side);
+            let color: string;
+            if (cell === 2) color = NEON_COLORS.exit;
+            else if (cell === 3) color = NEON_COLORS.door;
+            else color = side === 0 ? NEON_COLORS.wall : NEON_COLORS.wallSide;
+            this.setIllumination(key, ambIntensity, color);
+          }
+        }
+      }
+    }
+  }
+
   private updateProximityIllumination() {
     const p = this.player;
     const proxRadius = 1.2;
@@ -1759,6 +1812,43 @@ export class EchoGameEngine {
           s => s.item.effect === chapter.exitRequiredKey
         );
         if (!hasKey) return;
+      }
+
+      // Calculate completion time
+      const completionTimeMs = performance.now() - this.gameStartTime;
+      const completionTimeSec = completionTimeMs / 1000;
+      this.lastCompletionTimeSeconds = completionTimeSec;
+
+      // Check speedrun challenge
+      this.lastReward = null;
+      const challenge = SPEEDRUN_CHALLENGES.find(c => c.chapterId === this.currentChapter);
+      if (challenge) {
+        for (const reward of challenge.rewards) {
+          if (completionTimeSec <= reward.timeLimitSeconds) {
+            this.lastReward = reward;
+            this.totalPoints += reward.points;
+
+            // Check if this character is already unlocked
+            const alreadyUnlocked = this.unlockedCharacters.some(
+              uc => uc.chapterId === this.currentChapter && uc.tier === reward.tier
+            );
+            if (!alreadyUnlocked) {
+              this.unlockedCharacters.push({
+                chapterId: this.currentChapter,
+                tier: reward.tier,
+                characterName: reward.characterName,
+                characterIcon: reward.characterIcon,
+              });
+            }
+            break; // Only award the best tier achieved
+          }
+        }
+      }
+
+      // Track best time
+      const bestTime = this.bestChapterTimes.get(this.currentChapter) ?? Infinity;
+      if (completionTimeSec < bestTime) {
+        this.bestChapterTimes.set(this.currentChapter, completionTimeSec);
       }
 
       this.state = 'won';
@@ -2655,6 +2745,7 @@ export class EchoGameEngine {
     }
 
     const chapter = CHAPTERS.find(c => c.id === this.currentChapter);
+    const fontSize = Math.min(14, w / 50);
 
     ctx.save();
     ctx.shadowColor = NEON_COLORS.exit;
@@ -2662,25 +2753,84 @@ export class EchoGameEngine {
     ctx.fillStyle = NEON_COLORS.exit;
     ctx.font = `bold ${Math.min(36, w / 14)}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('SOBREVIVISTE', w / 2, h / 2 - 40);
+    ctx.fillText('SOBREVIVISTE', w / 2, h / 2 - 120);
     ctx.shadowBlur = 0;
 
     if (chapter) {
       ctx.fillStyle = 'rgba(118,255,3,0.6)';
-      ctx.font = `${Math.min(14, w / 50)}px monospace`;
-      ctx.fillText(chapter.outroText, w / 2, h / 2 + 10);
+      ctx.font = `${fontSize}px monospace`;
+      ctx.fillText(chapter.outroText, w / 2, h / 2 - 80);
+    }
+
+    // Time display
+    const timeSeconds = this.lastCompletionTimeSeconds;
+    const mins = Math.floor(timeSeconds / 60);
+    const secs = Math.floor(timeSeconds % 60);
+    const ms = Math.floor((timeSeconds % 1) * 100);
+    const timeStr = `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+
+    ctx.fillStyle = '#00e5ff';
+    ctx.font = `bold ${Math.min(20, w / 30)}px monospace`;
+    ctx.fillText(`⏱ ${timeStr}`, w / 2, h / 2 - 45);
+
+    // Speedrun challenge results
+    const challenge = SPEEDRUN_CHALLENGES.find(c => c.chapterId === this.currentChapter);
+    if (challenge) {
+      const tierColors: Record<string, string> = { gold: '#ffd700', silver: '#c0c0c0', bronze: '#cd7f32' };
+      const tierLabels: Record<string, string> = { gold: '🥇 ORO', silver: '🥈 PLATA', bronze: '🥉 BRONCE' };
+
+      // Show time targets
+      ctx.fillStyle = 'rgba(0,229,255,0.4)';
+      ctx.font = `${Math.min(10, w / 70)}px monospace`;
+      ctx.fillText('─ RETOS DE VELOCIDAD ─', w / 2, h / 2 - 22);
+
+      let yOffset = 0;
+      for (const reward of challenge.rewards) {
+        const achieved = this.lastReward?.tier === reward.tier;
+        const targetMins = Math.floor(reward.timeLimitSeconds / 60);
+        const targetSecs = reward.timeLimitSeconds % 60;
+        const targetStr = `${targetMins}:${targetSecs.toString().padStart(2, '0')}`;
+
+        if (achieved) {
+          // This tier was achieved - highlight it
+          ctx.fillStyle = tierColors[reward.tier];
+          ctx.font = `bold ${Math.min(13, w / 55)}px monospace`;
+          ctx.fillText(`${tierLabels[reward.tier]} ✓ ${targetStr} → +${reward.points} pts`, w / 2, h / 2 - 5 + yOffset);
+
+          // Show unlocked character
+          ctx.fillStyle = tierColors[reward.tier];
+          ctx.font = `bold ${Math.min(15, w / 45)}px monospace`;
+          ctx.fillText(`${reward.characterIcon} ${reward.characterName}`, w / 2, h / 2 + 15 + yOffset);
+
+          ctx.fillStyle = `rgba(${reward.tier === 'gold' ? '255,215,0' : reward.tier === 'silver' ? '192,192,192' : '205,127,50'},0.6)`;
+          ctx.font = `${Math.min(10, w / 70)}px monospace`;
+          ctx.fillText(`"${reward.characterDescription}"`, w / 2, h / 2 + 30 + yOffset);
+          yOffset += 55;
+        } else {
+          // Not achieved
+          ctx.fillStyle = 'rgba(100,100,100,0.4)';
+          ctx.font = `${Math.min(11, w / 60)}px monospace`;
+          ctx.fillText(`${tierLabels[reward.tier]} ✗ ${targetStr} → ${reward.points} pts`, w / 2, h / 2 - 5 + yOffset);
+          yOffset += 20;
+        }
+      }
+
+      // Total points
+      ctx.fillStyle = '#ffd700';
+      ctx.font = `bold ${Math.min(14, w / 50)}px monospace`;
+      ctx.fillText(`⭐ PUNTOS TOTALES: ${this.totalPoints}`, w / 2, h / 2 + yOffset + 10);
     }
 
     const nextChapter = this.currentChapter + 1;
     if (nextChapter <= CHAPTERS.length) {
       ctx.fillStyle = 'rgba(118,255,3,0.4)';
-      ctx.font = `${Math.min(13, w / 50)}px monospace`;
-      ctx.fillText(`Capítulo ${nextChapter} desbloqueado`, w / 2, h / 2 + 40);
+      ctx.font = `${fontSize}px monospace`;
+      ctx.fillText(`Capítulo ${nextChapter} desbloqueado`, w / 2, h - 80);
     }
 
     ctx.fillStyle = 'rgba(118,255,3,0.5)';
-    ctx.font = `${Math.min(14, w / 50)}px monospace`;
-    ctx.fillText('Presiona R para continuar', w / 2, h / 2 + 80);
+    ctx.font = `${fontSize}px monospace`;
+    ctx.fillText('Presiona R para continuar', w / 2, h - 50);
 
     ctx.textAlign = 'left';
     ctx.restore();

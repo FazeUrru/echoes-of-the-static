@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { EchoGameEngine } from '@/game/engine';
-import { GameState, Difficulty, DIFFICULTY_CONFIGS, CHAPTERS, ProfileSettings, AdvancedSettings, DEFAULT_PROFILE, DEFAULT_ADVANCED, ControlBinding, DEFAULT_CONTROLS } from '@/game/types';
+import { GameState, Difficulty, DIFFICULTY_CONFIGS, CHAPTERS, ProfileSettings, AdvancedSettings, DEFAULT_PROFILE, DEFAULT_ADVANCED, ControlBinding, DEFAULT_CONTROLS, SPEEDRUN_CHALLENGES } from '@/game/types';
 
 // ============================================================
 // Main Game Component
@@ -113,6 +113,7 @@ export default function EchoGame() {
             <p>E: Interactuar | 1-4: Inventario | Q: Usar | G: Soltar | ESC: Pausa</p>
           </div>
           <div className="mt-4 font-mono text-[10px] opacity-20" style={{ color: '#0097a7' }}>🎧 Auriculares recomendados</div>
+          <div className="mt-2 font-mono text-[9px] opacity-15" style={{ color: '#ffd700' }}>🏆 Complétalo rápido para desbloquear personajes exclusivos</div>
         </div>
       )}
 
@@ -147,10 +148,12 @@ export default function EchoGame() {
       {/* ===== CHAPTER SELECT ===== */}
       {gameState === 'chapterSelect' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10 px-4 overflow-y-auto">
-          <h2 className="text-2xl font-mono mb-6 tracking-widest" style={{ color: '#00e5ff' }}>CAPÍTULOS</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-3xl w-full mb-6">
+          <h2 className="text-2xl font-mono mb-2 tracking-widest" style={{ color: '#00e5ff' }}>CAPÍTULOS</h2>
+          <p className="font-mono text-[10px] mb-6 opacity-30" style={{ color: '#ffd700' }}>🏆 Complétalos en tiempo récord para ganar puntos y personajes exclusivos</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-4xl w-full mb-6">
             {CHAPTERS.map(ch => {
               const unlocked = ch.id <= unlockedChapters;
+              const challenge = SPEEDRUN_CHALLENGES.find(sc => sc.chapterId === ch.id);
               return (
                 <button key={ch.id} onClick={() => unlocked && setSelectedChapter(ch.id)} disabled={!unlocked}
                   className="p-4 border font-mono text-left transition-all"
@@ -164,6 +167,28 @@ export default function EchoGame() {
                   <div className="text-sm font-bold mb-1">{unlocked ? ch.name : '???'}</div>
                   <div className="text-[10px] opacity-50">{unlocked ? ch.description : 'Completa el capítulo anterior'}</div>
                   {unlocked && <div className="text-[9px] mt-1 opacity-30">{ch.enemies.map(e => e.count).reduce((a,b) => a+b, 0)} entidades</div>}
+                  {/* Speedrun challenge targets */}
+                  {unlocked && challenge && (
+                    <div className="mt-2 pt-2 border-t" style={{ borderColor: 'rgba(255,215,0,0.1)' }}>
+                      <div className="text-[8px] opacity-40 mb-1" style={{ color: '#ffd700' }}>RETO DE VELOCIDAD</div>
+                      {challenge.rewards.map(r => {
+                        const targetMins = Math.floor(r.timeLimitSeconds / 60);
+                        const targetSecs = r.timeLimitSeconds % 60;
+                        const targetStr = `${targetMins}:${targetSecs.toString().padStart(2, '0')}`;
+                        const tierIcon = r.tier === 'gold' ? '🥇' : r.tier === 'silver' ? '🥈' : '🥉';
+                        return (
+                          <div key={r.tier} className="text-[8px] opacity-35 flex items-center gap-1">
+                            <span>{tierIcon}</span>
+                            <span>&lt;{targetStr}</span>
+                            <span style={{ color: r.tier === 'gold' ? '#ffd700' : r.tier === 'silver' ? '#c0c0c0' : '#cd7f32' }}>
+                              +{r.points}pts
+                            </span>
+                            <span className="opacity-60">{r.characterIcon}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </button>
               );
             })}
@@ -181,7 +206,32 @@ export default function EchoGame() {
           <div className="text-sm font-mono mb-2 tracking-widest" style={{ color: '#0097a7' }}>{CHAPTERS[selectedChapter - 1]?.subtitle}</div>
           <h2 className="text-3xl md:text-5xl font-mono font-bold mb-6" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.4)' }}>{CHAPTERS[selectedChapter - 1]?.name}</h2>
           <p className="font-mono text-sm max-w-lg text-center leading-relaxed" style={{ color: 'rgba(0,229,255,0.5)' }}>{CHAPTERS[selectedChapter - 1]?.introText}</p>
-          <div className="mt-8 font-mono text-xs opacity-30 animate-pulse">Preparándote...</div>
+          {/* Show speedrun targets during intro */}
+          {(() => {
+            const challenge = SPEEDRUN_CHALLENGES.find(sc => sc.chapterId === selectedChapter);
+            if (!challenge) return null;
+            return (
+              <div className="mt-6 text-center">
+                <div className="font-mono text-[10px] mb-2" style={{ color: 'rgba(255,215,0,0.4)' }}>⏱ RETOS DE VELOCIDAD</div>
+                <div className="flex gap-4 justify-center">
+                  {challenge.rewards.map(r => {
+                    const targetMins = Math.floor(r.timeLimitSeconds / 60);
+                    const targetSecs = r.timeLimitSeconds % 60;
+                    const targetStr = `${targetMins}:${targetSecs.toString().padStart(2, '0')}`;
+                    const tierIcon = r.tier === 'gold' ? '🥇' : r.tier === 'silver' ? '🥈' : '🥉';
+                    const tierColor = r.tier === 'gold' ? '#ffd700' : r.tier === 'silver' ? '#c0c0c0' : '#cd7f32';
+                    return (
+                      <div key={r.tier} className="text-center">
+                        <div className="font-mono text-xs" style={{ color: tierColor }}>{tierIcon} &lt;{targetStr}</div>
+                        <div className="font-mono text-[9px] opacity-40">{r.characterIcon} {r.characterName}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+          <div className="mt-8 font-mono text-xs opacity-30 animate-pulse">Pulsa ESPACIO para comenzar</div>
         </div>
       )}
 
