@@ -1579,8 +1579,9 @@ export class EchoGameEngine {
       const touchStrafe = this.touchMoveX;
       moveX += Math.cos(p.dir) * touchForward * effectiveSpeed * dt;
       moveY += Math.sin(p.dir) * touchForward * effectiveSpeed * dt;
-      moveX += Math.cos(p.dir - Math.PI / 2) * touchStrafe * effectiveSpeed * dt;
-      moveY += Math.sin(p.dir - Math.PI / 2) * touchStrafe * effectiveSpeed * dt;
+      // cos(dir-PI/2) points LEFT, so subtract to go RIGHT when touchStrafe > 0
+      moveX -= Math.cos(p.dir - Math.PI / 2) * touchStrafe * effectiveSpeed * dt;
+      moveY -= Math.sin(p.dir - Math.PI / 2) * touchStrafe * effectiveSpeed * dt;
       p.isMoving = true;
     }
 

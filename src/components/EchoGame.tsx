@@ -344,10 +344,9 @@ export default function EchoGame() {
                 }
                 j.dx = dx;
                 j.dy = dy;
-                // Joystick X controls TURNING (look left/right), Y controls forward/back
-                eng.touchLookDelta += dx * 0.3; // swipe left/right = turn
+                // Left joystick = WASD movement: X = strafe, Y = forward/back
+                eng.touchMoveX = dx / maxR; // -1 to 1, positive = strafe right
                 eng.touchMoveY = -dy / maxR; // -1 to 1, positive = forward (up on screen = forward)
-                eng.touchMoveX = 0; // no strafe from joystick
                 setJoystickPos({ dx, dy, active: true });
               }
             }
