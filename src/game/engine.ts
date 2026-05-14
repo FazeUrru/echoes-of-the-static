@@ -112,6 +112,13 @@ export class EchoGameEngine {
   mouseLocked = false;
   private _cleanup?: () => void;
 
+  // ---- Touch input ----
+  touchMoveX: number = 0; // -1 to 1 (left stick horizontal)
+  touchMoveY: number = 0; // -1 to 1 (left stick vertical)
+  touchSneak: boolean = false; // sneak toggle from touch button
+  touchLookDelta: number = 0; // rotation delta from touch swipe
+  isMobile: boolean = false; // whether running on mobile
+
   // ---- Timing ----
   lastTime = 0;
   pulseCooldownTimer = 0;
@@ -186,6 +193,21 @@ export class EchoGameEngine {
     this.state = 'chapterIntro';
     this.introTimer = 0;
     this.onStateChange?.('chapterIntro');
+  }
+
+  /** Transition from chapterIntro to playing (used by touch UI) */
+  startPlaying() {
+    if (this.state === 'chapterIntro') {
+      this.state = 'playing';
+      this.audio.startAmbient();
+      this.audio.startHeartbeat();
+      this.onStateChange?.('playing');
+    }
+  }
+
+  /** Restart the current chapter */
+  restartChapter() {
+    this.startGame(this.currentChapter, this.difficulty);
   }
 
   private initLevel() {
@@ -482,7 +504,7 @@ export class EchoGameEngine {
   // Flashlight
   // ============================================================
 
-  private toggleFlashlight() {
+  toggleFlashlight() {
     if (this.player.flashlightBattery <= 0 && !this.player.flashlightOn) return;
     this.player.flashlightOn = !this.player.flashlightOn;
     this.audio.playFlashlightClick();
@@ -579,7 +601,7 @@ export class EchoGameEngine {
     this.audio.playPickup();
   }
 
-  private useSelectedItem() {
+  useSelectedItem() {
     const p = this.player;
     if (p.selectedSlot >= p.inventory.length) return;
 
@@ -670,7 +692,7 @@ export class EchoGameEngine {
     }
   }
 
-  private dropSelectedItem() {
+  dropSelectedItem() {
     const p = this.player;
     if (p.selectedSlot >= p.inventory.length) return;
 
@@ -833,7 +855,7 @@ export class EchoGameEngine {
   // Door interaction
   // ============================================================
 
-  private handleInteract() {
+  handleInteract() {
     const p = this.player;
     if (p.interactCooldown > 0) return;
     p.interactCooldown = 0.3;
@@ -943,12 +965,20 @@ export class EchoGameEngine {
   private updatePlayer(dt: number) {
     const p = this.player;
     p.isMoving = false;
-    p.isSneaking = this.isActionDown('sneak');
+    p.isSneaking = this.isActionDown('sneak') || this.touchSneak;
     const speed = p.isSneaking ? this.diffConfig.sneakSpeed : this.diffConfig.playerSpeed;
+
+    // Apply touch look delta
+    if (this.touchLookDelta !== 0) {
+      const sens = this.advanced.mouseSensitivity * 0.001;
+      p.dir += this.touchLookDelta * sens;
+      this.touchLookDelta = 0;
+    }
 
     let moveX = 0;
     let moveY = 0;
 
+    // Keyboard movement
     if (this.isActionDown('moveForward')) {
       moveX += Math.cos(p.dir) * speed * dt;
       moveY += Math.sin(p.dir) * speed * dt;
@@ -967,6 +997,18 @@ export class EchoGameEngine {
     if (this.isActionDown('moveRight')) {
       moveX -= Math.cos(p.dir - Math.PI / 2) * speed * dt;
       moveY -= Math.sin(p.dir - Math.PI / 2) * speed * dt;
+      p.isMoving = true;
+    }
+
+    // Touch joystick movement (additive with keyboard)
+    if (this.touchMoveX !== 0 || this.touchMoveY !== 0) {
+      // touchMoveY > 0 = forward, touchMoveX > 0 = strafe right
+      const touchForward = this.touchMoveY;
+      const touchStrafe = this.touchMoveX;
+      moveX += Math.cos(p.dir) * touchForward * speed * dt;
+      moveY += Math.sin(p.dir) * touchForward * speed * dt;
+      moveX += Math.cos(p.dir - Math.PI / 2) * touchStrafe * speed * dt;
+      moveY += Math.sin(p.dir - Math.PI / 2) * touchStrafe * speed * dt;
       p.isMoving = true;
     }
 
@@ -1865,7 +1907,7 @@ export class EchoGameEngine {
     }
   }
 
-  private playerDeath() {
+  playerDeath() {
     this.state = 'dead';
     this.audio.playDeath();
     this.audio.stopHeartbeat();

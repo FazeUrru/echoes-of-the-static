@@ -5,6 +5,26 @@ import { EchoGameEngine } from '@/game/engine';
 import { GameState, Difficulty, DIFFICULTY_CONFIGS, CHAPTERS, ProfileSettings, AdvancedSettings, DEFAULT_PROFILE, DEFAULT_ADVANCED, ControlBinding, DEFAULT_CONTROLS, SPEEDRUN_CHALLENGES } from '@/game/types';
 
 // ============================================================
+// Mobile detection hook
+// ============================================================
+function useIsTouchDevice() {
+  const [isTouch, setIsTouch] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      setIsTouch(
+        'ontouchstart' in window ||
+        window.matchMedia('(pointer: coarse)').matches ||
+        navigator.maxTouchPoints > 0
+      );
+    };
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isTouch;
+}
+
+// ============================================================
 // Main Game Component
 // ============================================================
 export default function EchoGame() {
@@ -22,16 +42,33 @@ export default function EchoGame() {
   const [controls, setControls] = useState<ControlBinding[]>([...DEFAULT_CONTROLS]);
   const [remappingAction, setRemappingAction] = useState<string | null>(null);
   const [isStarted, setIsStarted] = useState(false);
+  const isMobile = useIsTouchDevice();
+
+  // ---- Touch joystick state ----
+  const joystickRef = useRef<{ active: boolean; touchId: number; cx: number; cy: number; dx: number; dy: number }>({
+    active: false, touchId: -1, cx: 0, cy: 0, dx: 0, dy: 0,
+  });
+
+  // ---- Touch look state ----
+  const lookTouchRef = useRef<{ active: boolean; touchId: number; lastX: number }>({
+    active: false, touchId: -1, lastX: 0,
+  });
+
+  // ---- Sneak toggle state ----
+  const [sneakActive, setSneakActive] = useState(false);
+
+  // ---- Joystick visual position (state for render) ----
+  const [joystickPos, setJoystickPos] = useState({ dx: 0, dy: 0, active: false });
 
   const handleStart = useCallback(async (chapterId: number, diff: Difficulty) => {
     const eng = engineRef.current;
     if (!eng) return;
     await eng.startGame(chapterId, diff);
     setGameState('chapterIntro');
-    // After 3 seconds, transition to playing
+    // After 3 seconds, transition to playing (unless on mobile where user taps)
     setTimeout(() => {
       if (eng.state === 'chapterIntro') {
-        eng.state = 'playing';
+        eng.startPlaying();
         setGameState('playing');
       }
     }, 3000);
@@ -48,6 +85,7 @@ export default function EchoGame() {
 
     const eng = new EchoGameEngine();
     eng.init(canvas);
+    eng.isMobile = isMobile;
     eng.onStateChange = (state: GameState) => {
       setGameState(state);
       if (state === 'won') {
@@ -82,10 +120,180 @@ export default function EchoGame() {
   }, []);
 
   return (
-    <div ref={containerRef} className="relative w-full h-screen bg-black overflow-hidden select-none" style={{ cursor: gameState === 'playing' ? 'crosshair' : 'default' }}
-      onClick={() => { if (gameState === 'playing' && canvasRef.current) canvasRef.current.requestPointerLock(); }}>
+    <div ref={containerRef} className="relative w-full h-screen bg-black overflow-hidden select-none game-container" style={{ cursor: gameState === 'playing' && !isMobile ? 'crosshair' : 'default' }}
+      onClick={() => { if (gameState === 'playing' && !isMobile && canvasRef.current) canvasRef.current.requestPointerLock(); }}>
 
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }} />
+
+      {/* ===== TOUCH LOOK AREA (canvas area for swiping) ===== */}
+      {isMobile && gameState === 'playing' && (
+        <div className="absolute inset-0 z-5"
+          style={{ touchAction: 'none' }}
+          onTouchStart={(e) => {
+            // Only track touches that aren't on joystick or buttons
+            for (let i = 0; i < e.changedTouches.length; i++) {
+              const t = e.changedTouches[i];
+              const el = t.target as HTMLElement;
+              if (el.closest('.touch-joystick') || el.closest('.touch-btn')) continue;
+              if (!lookTouchRef.current.active) {
+                lookTouchRef.current = { active: true, touchId: t.identifier, lastX: t.clientX };
+              }
+            }
+          }}
+          onTouchMove={(e) => {
+            e.preventDefault();
+            const eng = engineRef.current;
+            if (!eng || !lookTouchRef.current.active) return;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+              const t = e.changedTouches[i];
+              if (t.identifier === lookTouchRef.current.touchId) {
+                const deltaX = t.clientX - lookTouchRef.current.lastX;
+                eng.touchLookDelta += deltaX * 2;
+                lookTouchRef.current.lastX = t.clientX;
+              }
+            }
+          }}
+          onTouchEnd={(e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+              const t = e.changedTouches[i];
+              if (t.identifier === lookTouchRef.current.touchId) {
+                lookTouchRef.current = { active: false, touchId: -1, lastX: 0 };
+              }
+            }
+          }}
+        />
+      )}
+
+      {/* ===== VIRTUAL JOYSTICK (Left Side) ===== */}
+      {isMobile && gameState === 'playing' && (
+        <div className="touch-joystick absolute z-20"
+          style={{ left: 20, bottom: 30, width: 140, height: 140 }}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const t = e.changedTouches[0];
+            joystickRef.current = { active: true, touchId: t.identifier, cx, cy, dx: 0, dy: 0 };
+            setJoystickPos({ dx: 0, dy: 0, active: true });
+          }}
+          onTouchMove={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const eng = engineRef.current;
+            const j = joystickRef.current;
+            if (!j.active || !eng) return;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+              const t = e.changedTouches[i];
+              if (t.identifier === j.touchId) {
+                let dx = t.clientX - j.cx;
+                let dy = t.clientY - j.cy;
+                const maxR = 50;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > maxR) {
+                  dx = (dx / dist) * maxR;
+                  dy = (dy / dist) * maxR;
+                }
+                j.dx = dx;
+                j.dy = dy;
+                eng.touchMoveX = dx / maxR; // -1 to 1, positive = right
+                eng.touchMoveY = -dy / maxR; // -1 to 1, positive = forward (up on screen = forward)
+                setJoystickPos({ dx, dy, active: true });
+              }
+            }
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+              const t = e.changedTouches[i];
+              if (t.identifier === joystickRef.current.touchId) {
+                const eng = engineRef.current;
+                if (eng) {
+                  eng.touchMoveX = 0;
+                  eng.touchMoveY = 0;
+                }
+                joystickRef.current = { active: false, touchId: -1, cx: 0, cy: 0, dx: 0, dy: 0 };
+                setJoystickPos({ dx: 0, dy: 0, active: false });
+              }
+            }
+          }}
+        >
+          {/* Outer circle */}
+          <div className="absolute inset-0 rounded-full" style={{ border: '2px solid rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.05)' }} />
+          {/* Inner thumb */}
+          <div className="absolute rounded-full"
+            style={{
+              width: 50, height: 50,
+              left: 45 + joystickPos.dx, top: 45 + joystickPos.dy,
+              background: 'rgba(0,229,255,0.4)',
+              boxShadow: '0 0 10px rgba(0,229,255,0.3)',
+              transition: joystickPos.active ? 'none' : 'left 0.1s, top 0.1s',
+            }} />
+        </div>
+      )}
+
+      {/* ===== ACTION BUTTONS (Right Side) ===== */}
+      {isMobile && gameState === 'playing' && (
+        <div className="absolute right-3 bottom-4 z-20 flex flex-col items-end gap-2">
+          {/* ECO - Large pulse button */}
+          <button className="touch-btn game-touch-btn game-touch-btn-lg"
+            onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.emitPulse(); }}>
+            ECO
+          </button>
+          <div className="flex gap-2">
+            {/* Flashlight */}
+            <button className="touch-btn game-touch-btn game-touch-btn-md"
+              onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.toggleFlashlight(); }}>
+              🔦
+            </button>
+            {/* Interact */}
+            <button className="touch-btn game-touch-btn game-touch-btn-md"
+              onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.handleInteract(); }}>
+              E
+            </button>
+          </div>
+          <div className="flex gap-2">
+            {/* Sneak toggle */}
+            <button className={`touch-btn game-touch-btn game-touch-btn-md ${sneakActive ? 'game-touch-btn-active' : ''}`}
+              onTouchStart={(e) => {
+                e.preventDefault(); e.stopPropagation();
+                const newVal = !sneakActive;
+                setSneakActive(newVal);
+                const eng = engineRef.current;
+                if (eng) eng.touchSneak = newVal;
+              }}>
+              🤫
+            </button>
+            {/* Use item */}
+            <button className="touch-btn game-touch-btn game-touch-btn-sm"
+              onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.useSelectedItem(); }}>
+              ▶
+            </button>
+            {/* Drop item */}
+            <button className="touch-btn game-touch-btn game-touch-btn-sm"
+              onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.dropSelectedItem(); }}>
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== PAUSE BUTTON (Top Right) ===== */}
+      {isMobile && gameState === 'playing' && (
+        <button className="touch-btn absolute top-3 right-3 z-20 game-touch-btn game-touch-btn-sm"
+          onTouchStart={(e) => {
+            e.preventDefault(); e.stopPropagation();
+            const eng = engineRef.current;
+            if (eng) {
+              eng.state = 'paused';
+              setGameState('paused');
+            }
+          }}>
+          ⏸
+        </button>
+      )}
 
       {/* ===== MENU ===== */}
       {gameState === 'menu' && !isStarted && (
@@ -232,6 +440,13 @@ export default function EchoGame() {
             );
           })()}
           <div className="mt-8 font-mono text-xs opacity-30 animate-pulse">Pulsa ESPACIO para comenzar</div>
+          {isMobile && (
+            <button className="mt-4 px-8 py-4 font-mono text-sm tracking-widest border animate-pulse"
+              style={{ color: '#00e5ff', borderColor: 'rgba(0,229,255,0.4)', background: 'rgba(0,229,255,0.05)', minHeight: 48 }}
+              onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.startPlaying(); }}>
+              TOCAR PARA COMENZAR
+            </button>
+          )}
         </div>
       )}
 
@@ -244,6 +459,51 @@ export default function EchoGame() {
             <NeonButton onClick={() => setShowSettings(true)} dim>AJUSTES</NeonButton>
             <NeonButton onClick={() => { setGameState('menu'); setIsStarted(false); }} dim>SALIR AL MENÚ</NeonButton>
           </div>
+          {isMobile && (
+            <button className="mt-6 px-8 py-4 font-mono text-sm tracking-widest border"
+              style={{ color: '#00e5ff', borderColor: 'rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.05)', minHeight: 48 }}
+              onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); const eng = engineRef.current; if (eng) { eng.state = 'playing'; } setGameState('playing'); }}>
+              TOCAR PARA CONTINUAR
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ===== DEAD SCREEN TOUCH ===== */}
+      {isMobile && gameState === 'dead' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-10"
+          onTouchStart={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            engineRef.current?.restartChapter();
+          }}>
+          <button className="px-8 py-4 font-mono text-sm tracking-widest border animate-pulse"
+            style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.4)', background: 'rgba(255,23,68,0.05)', minHeight: 48 }}>
+            TOCAR PARA REINTENTAR
+          </button>
+        </div>
+      )}
+
+      {/* ===== WON SCREEN TOUCH ===== */}
+      {isMobile && gameState === 'won' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-10"
+          onTouchStart={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const eng = engineRef.current;
+            if (eng) {
+              const nextChapter = eng.currentChapter + 1;
+              if (nextChapter <= 6) {
+                eng.startGame(nextChapter, eng.difficulty);
+              } else {
+                setGameState('menu');
+              }
+            }
+          }}>
+          <button className="px-8 py-4 font-mono text-sm tracking-widest border animate-pulse"
+            style={{ color: '#76ff03', borderColor: 'rgba(118,255,3,0.4)', background: 'rgba(118,255,3,0.05)', minHeight: 48 }}>
+            TOCAR PARA CONTINUAR
+          </button>
         </div>
       )}
 

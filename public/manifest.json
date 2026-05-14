@@ -1,0 +1,17 @@
+{
+  "name": "Echoes of the Static",
+  "short_name": "Ecos",
+  "description": "Un juego de terror auditivo en primera persona con ecolocación",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
