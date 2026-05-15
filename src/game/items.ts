@@ -57,7 +57,8 @@ export const ALL_ITEMS: ItemDef[] = [
   { id: 'keycard_gold', name: 'Tarjeta Dorada', description: 'Acceso total. Todas las puertas electrónicas.', category: 'key', rarity: LEGENDARY, stackable: false, maxStack: 1, icon: '💳', effect: 'keycard_gold' },
   { id: 'key_street_gate', name: 'Llave del Portón', description: 'Abre el portón de la calle.', category: 'key', rarity: UNCOMMON, stackable: false, maxStack: 1, icon: '🚪', effect: 'key_street_gate' },
 
-  // ═══════════════ WEAPONS (8) ═══════════════
+  // ═══════════════ WEAPONS (18 = 8 distraction + 10 combat) ═══════════════
+  // ---- Distraction Weapons (original) ----
   { id: 'throwing_rock', name: 'Piedra', description: 'Lánzala para crear un sonido lejano. Distrae entidades.', category: 'weapon', rarity: COMMON, stackable: true, maxStack: 10, icon: '🪨', effect: 'throw_distraction', noiseOnUse: 0.8, rangeOnUse: 10, uses: 1 },
   { id: 'glass_bottle', name: 'Botella de Cristal', description: 'Se rompe al impactar. Ruido fuerte en el punto de impacto.', category: 'weapon', rarity: COMMON, stackable: true, maxStack: 5, icon: '🍶', effect: 'throw_loud', noiseOnUse: 1.0, rangeOnUse: 12, uses: 1 },
   { id: 'flare', name: 'Bengala', description: 'Ilumina una gran zona durante 10s. Muy ruidoso.', category: 'weapon', rarity: UNCOMMON, stackable: true, maxStack: 3, icon: '🎆', effect: 'flare', noiseOnUse: 1.0, rangeOnUse: 20, uses: 1 },
@@ -66,6 +67,18 @@ export const ALL_ITEMS: ItemDef[] = [
   { id: 'shock_device', name: 'Descargador', description: 'Aturde a una entidad cercana durante 5s.', category: 'weapon', rarity: RARE, stackable: false, maxStack: 1, icon: '⚡', effect: 'stun_entity', noiseOnUse: 0.7, rangeOnUse: 2, uses: 3 },
   { id: 'smoke_bomb', name: 'Bomba de Humo', description: 'Crea una zona de silencio temporal. 15s.', category: 'weapon', rarity: RARE, stackable: true, maxStack: 2, icon: '💨', effect: 'silence_zone', uses: 1 },
   { id: 'sound_trap', name: 'Trampa Sonora', description: 'Coloca una trampa que emite ruido cuando una entidad pasa cerca.', category: 'weapon', rarity: RARE, stackable: true, maxStack: 2, icon: '⚠️', effect: 'sound_trap', uses: 1 },
+
+  // ---- COMBAT WEAPONS (10) - Deal damage to entities ----
+  { id: 'echo_pistol', name: 'Pistola de Eco', description: 'Arma básica. Dispara pulsos sónicos. Daño: 15. Ruido moderado.', category: 'weapon', rarity: COMMON, stackable: false, maxStack: 1, icon: '🔫', effect: 'combat_shoot', noiseOnUse: 0.6, rangeOnUse: 12, uses: 30, value: 15 },
+  { id: 'sonic_rifle', name: 'Rifle Sónico', description: 'Largo alcance, alta precisión. Daño: 25. Ruido alto.', category: 'weapon', rarity: UNCOMMON, stackable: false, maxStack: 1, icon: '🎯', effect: 'combat_shoot', noiseOnUse: 0.8, rangeOnUse: 20, uses: 20, value: 25 },
+  { id: 'pulse_shotgun', name: 'Escopeta de Pulso', description: 'Devastadora a corta distancia. Daño: 40. Ruido extremo.', category: 'weapon', rarity: RARE, stackable: false, maxStack: 1, icon: '💥', effect: 'combat_shoot', noiseOnUse: 1.0, rangeOnUse: 6, uses: 12, value: 40 },
+  { id: 'static_flamethrower', name: 'Lanzallamas Estático', description: 'Quemadura continua. Daño: 8/tick. Rango corto.', category: 'weapon', rarity: RARE, stackable: false, maxStack: 1, icon: '🔥', effect: 'combat_flame', noiseOnUse: 0.4, rangeOnUse: 4, uses: 60, value: 8 },
+  { id: 'void_sniper', name: 'Sniper de Vacío', description: 'Daño masivo a larga distancia. Daño: 60. Muy lenta.', category: 'weapon', rarity: LEGENDARY, stackable: false, maxStack: 1, icon: '🔭', effect: 'combat_shoot', noiseOnUse: 1.2, rangeOnUse: 30, uses: 8, value: 60 },
+  { id: 'freq_mg', name: 'Ametralladora de Frecuencia', description: 'Rápida pero imprecisa. Daño: 8/bala. 60 balas.', category: 'weapon', rarity: UNCOMMON, stackable: false, maxStack: 1, icon: '⚡', effect: 'combat_burst', noiseOnUse: 0.9, rangeOnUse: 10, uses: 60, value: 8 },
+  { id: 'sonic_grenade', name: 'Granada Sónica', description: 'Explosión de sonido. Daño: 35 en área. Una sola vez.', category: 'weapon', rarity: UNCOMMON, stackable: true, maxStack: 3, icon: '💣', effect: 'combat_grenade', noiseOnUse: 1.0, rangeOnUse: 8, uses: 1, value: 35 },
+  { id: 'shadow_harpoon', name: 'Arpón de Sombra', description: 'Atrae al enemigo hacia ti. Daño: 20. Ruido bajo.', category: 'weapon', rarity: RARE, stackable: false, maxStack: 1, icon: '🔱', effect: 'combat_harpoon', noiseOnUse: 0.3, rangeOnUse: 15, uses: 10, value: 20 },
+  { id: 'discharge_staff', name: 'Bastón de Descarga', description: 'Cuerpo a cuerpo + rayo. Daño: 30. Silencioso.', category: 'weapon', rarity: RARE, stackable: false, maxStack: 1, icon: '🪄', effect: 'combat_melee', noiseOnUse: 0.2, rangeOnUse: 3, uses: 25, value: 30 },
+  { id: 'ether_cannon', name: 'Cañón de Éter', description: 'Arma definitiva. Daño: 80. Destruye todo. Muy ruidosa.', category: 'weapon', rarity: LEGENDARY, stackable: false, maxStack: 1, icon: '☄️', effect: 'combat_cannon', noiseOnUse: 1.5, rangeOnUse: 15, uses: 4, value: 80 },
 
   // ═══════════════ ARMOR (6) ═══════════════
   { id: 'padded_shoes', name: 'Zapatillas Acolchadas', description: 'Reduce ruido de pasos un 30%. Equipo pasivo.', category: 'armor', rarity: UNCOMMON, stackable: false, maxStack: 1, icon: '👟', effect: 'quiet_steps' },
@@ -112,10 +125,10 @@ export const ITEM_BY_ID = (id: string) => ALL_ITEMS.find(i => i.id === id);
 
 // Items that spawn in each map type
 export const ITEM_SPAWN_TABLES: Record<string, string[]> = {
-  building: ['flashlight', 'batteries_small', 'bandage', 'food_can', 'water_bottle', 'throwing_rock', 'glass_bottle', 'chalk', 'carpet_piece', 'key_rusty', 'note_1', 'note_2', 'candle', 'glow_stick', 'cloth_strip', 'metal_scrap', 'lockpick', 'padded_shoes', 'tape_roll', 'note_5', 'sonar_passive_module', 'echo_amplifier'],
-  sewers: ['flashlight_battery', 'bandage', 'stamina_drink', 'throwing_rock', 'key_sewer', 'note_3', 'candle', 'cloth_strip', 'wax_earplugs', 'foam_pad', 'clockwork_toy', 'old_radio', 'note_4', 'sound_dampener', 'caffeine_pill'],
-  street: ['throwing_rock', 'glass_bottle', 'food_can', 'water_bottle', 'key_street_gate', 'note_9', 'flare', 'firecracker', 'whistle', 'heavy_boots', 'thick_coat', 'chalk', 'carpet_piece', 'metal_scrap', 'batteries_small', 'compass'],
-  hospital: ['medkit', 'medkit_large', 'painkiller', 'adrenaline', 'antidote', 'key_hospital', 'keycard_blue', 'keycard_red', 'note_4', 'note_6', 'note_7', 'flashlight_battery', 'lockpick', 'shock_device', 'kevlar_vest', 'sonar_active_module', 'sound_dampener_field'],
-  underground: ['flashlight_battery', 'medkit', 'key_ancient', 'note_8', 'note_10', 'note_11', 'radar_device', 'echolocator', 'smoke_bomb', 'sound_trap', 'rope', 'bolt_cutters', 'night_visor', 'prism', 'sonar_passive_module', 'sonar_active_module', 'echo_amplifier', 'sound_dampener_field'],
-  tower: ['medkit_large', 'key_tower', 'keycard_gold', 'note_11', 'note_12', 'shadow_cloak', 'sleeping_pill', 'adrenaline', 'shock_device', 'smoke_bomb', 'flare', 'firecracker', 'ancient_key', 'flashlight_battery', 'sonar_passive_module', 'sonar_active_module', 'echo_amplifier', 'sound_dampener_field'],
+  building: ['flashlight', 'batteries_small', 'bandage', 'food_can', 'water_bottle', 'throwing_rock', 'glass_bottle', 'chalk', 'carpet_piece', 'key_rusty', 'note_1', 'note_2', 'candle', 'glow_stick', 'cloth_strip', 'metal_scrap', 'lockpick', 'padded_shoes', 'tape_roll', 'note_5', 'sonar_passive_module', 'echo_amplifier', 'echo_pistol', 'discharge_staff'],
+  sewers: ['flashlight_battery', 'bandage', 'stamina_drink', 'throwing_rock', 'key_sewer', 'note_3', 'candle', 'cloth_strip', 'wax_earplugs', 'foam_pad', 'clockwork_toy', 'old_radio', 'note_4', 'sound_dampener', 'caffeine_pill', 'echo_pistol', 'sonic_grenade'],
+  street: ['throwing_rock', 'glass_bottle', 'food_can', 'water_bottle', 'key_street_gate', 'note_9', 'flare', 'firecracker', 'whistle', 'heavy_boots', 'thick_coat', 'chalk', 'carpet_piece', 'metal_scrap', 'batteries_small', 'compass', 'sonic_rifle', 'shadow_harpoon'],
+  hospital: ['medkit', 'medkit_large', 'painkiller', 'adrenaline', 'antidote', 'key_hospital', 'keycard_blue', 'keycard_red', 'note_4', 'note_6', 'note_7', 'flashlight_battery', 'lockpick', 'shock_device', 'kevlar_vest', 'sonar_active_module', 'sound_dampener_field', 'pulse_shotgun', 'static_flamethrower'],
+  underground: ['flashlight_battery', 'medkit', 'key_ancient', 'note_8', 'note_10', 'note_11', 'radar_device', 'echolocator', 'smoke_bomb', 'sound_trap', 'rope', 'bolt_cutters', 'night_visor', 'prism', 'sonar_passive_module', 'sonar_active_module', 'echo_amplifier', 'sound_dampener_field', 'void_sniper', 'freq_mg'],
+  tower: ['medkit_large', 'key_tower', 'keycard_gold', 'note_11', 'note_12', 'shadow_cloak', 'sleeping_pill', 'adrenaline', 'shock_device', 'smoke_bomb', 'flare', 'firecracker', 'ancient_key', 'flashlight_battery', 'sonar_passive_module', 'sonar_active_module', 'echo_amplifier', 'sound_dampener_field', 'ether_cannon', 'void_sniper'],
 };

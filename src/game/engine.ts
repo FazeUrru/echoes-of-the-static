@@ -243,6 +243,31 @@ export class EchoGameEngine {
       origin: 'Proyecto Eco - Sujeto #7',
       story: 'El sujeto que dijo "Puedo oír las paredes respirar". Su conciencia se fracturó entre frecuencias, permitiéndole existir parcialmente fuera del plano físico. Aparece y desaparece como una mala sintonía de radio. Se teletransporta cerca de sonidos fuertes, susurrando en frecuencias que solo los locos pueden oír. Es el más antiguo, el más consciente de lo que fue.',
     },
+    devourer: {
+      name: 'El Devorador',
+      origin: 'Proyecto Eco - Sujeto #19',
+      story: 'Un espécimen de fuerza descomunal. Cuando la amplificación auditiva lo consumió, su cuerpo mutó en una bestia colosal. Sus cuernos curvos y su cola de látigo son testimonio de su furia. Carga ciegamente hacia cualquier sonido, y su embestida es devastadora. No pierde la presa fácilmente.',
+    },
+    abomination: {
+      name: 'La Abominación',
+      origin: 'Proyecto Eco - Sujeto #23',
+      story: 'Carne corrompida y huesos expuestos. Runas arcanas pulsan en su piel como un código maldito. Su sola presencia es tóxica, y su aura corroe todo lo que toca. Recibe golpes que matarían a cualquier otro, y su ira solo crece con cada herida.',
+    },
+    arachnid: {
+      name: 'La Arácnida',
+      origin: 'Proyecto Eco - Sujeto #31',
+      story: 'Lo que alguna vez fue una acróbata ahora es una criatura de ocho patas con rostro humanoide. Teje telarañas que atrapan a sus presas, ataca y se retira con velocidad sobrenatural. Es la más rápida de todas las entidades, y esquivar sus ataques es casi imposible.',
+    },
+    whisperer: {
+      name: 'El Susurrador',
+      origin: 'Proyecto Eco - Sujeto #44',
+      story: 'Su forma es estática, ruido visual dado forma. No tiene rostro, no tiene voz — solo susurros que paralizan. Cuando lo hieres, desaparece y reaparece en otro lugar. Crea ilusiones que confunden y desorientan. Es el más escurridizo y el más perturbador.',
+    },
+    broodmother: {
+      name: 'La Madre',
+      origin: 'Proyecto Eco - Sujeto #50',
+      story: 'Una masa orgánica que genera parásitos desde su interior. Es lenta pero implacable, y su mera presencia crea zonas de muerte. Los parásitos que engendra la defienden con ferocidad. Cuando la matas, sus hijos mueren con ella — pero llegar a ella es el verdadero desafío.',
+    },
   };
 
   // ---- Cinematic system ----
@@ -385,6 +410,14 @@ export class EchoGameEngine {
       selectedSlot: 0,
       interactCooldown: 0,
       hardcore: false,
+      equippedWeapon: null,
+      attackCooldown: 0,
+      isAttacking: false,
+      attackTimer: 0,
+      webbed: false,
+      webTimer: 0,
+      paralyzed: false,
+      paralyzeTimer: 0,
     };
 
     // Spawn entities at marked positions
@@ -409,12 +442,24 @@ export class EchoGameEngine {
               patrolAngle: Math.random() * Math.PI * 2,
               animPhase: Math.random() * Math.PI * 2,
               killTimer: 0,
-              health: 3,
+              health: template.maxHealth,
+              maxHealth: template.maxHealth,
+              stunTimer: 0,
+              hitFlashTimer: 0,
+              deathTimer: 0,
+              damage: template.damage,
               teleportCooldown: 0,
               isTeleporting: false,
               teleportTimer: 0,
               rushTimer: 0,
               persistenceTimer: 0,
+              chargeTimer: 0,
+              isCharging: false,
+              webCooldown: 0,
+              whisperTimer: 0,
+              illusionTimer: 0,
+              spawnTimer: 0,
+              parasiteIds: [],
             });
           }
         }
@@ -486,6 +531,14 @@ export class EchoGameEngine {
       selectedSlot: 0,
       interactCooldown: 0,
       hardcore: this.hardcoreMode,
+      equippedWeapon: null,
+      attackCooldown: 0,
+      isAttacking: false,
+      attackTimer: 0,
+      webbed: false,
+      webTimer: 0,
+      paralyzed: false,
+      paralyzeTimer: 0,
     };
 
     // Spawn entities based on chapter definition
@@ -520,12 +573,24 @@ export class EchoGameEngine {
           patrolAngle: Math.random() * Math.PI * 2,
           animPhase: Math.random() * Math.PI * 2,
           killTimer: 0,
-          health: 3,
+          health: template.maxHealth,
+          maxHealth: template.maxHealth,
+          stunTimer: 0,
+          hitFlashTimer: 0,
+          deathTimer: 0,
+          damage: template.damage,
           teleportCooldown: 0,
           isTeleporting: false,
           teleportTimer: 0,
           rushTimer: 0,
           persistenceTimer: 0,
+          chargeTimer: 0,
+          isCharging: false,
+          webCooldown: 0,
+          whisperTimer: 0,
+          illusionTimer: 0,
+          spawnTimer: 0,
+          parasiteIds: [],
         });
       }
     }
@@ -610,6 +675,11 @@ export class EchoGameEngine {
           e.preventDefault();
           this.dropSelectedItem();
         }
+        // Attack with KeyF or left mouse (Mouse0)
+        if (e.code === 'KeyF' && this.player.equippedWeapon) {
+          e.preventDefault();
+          this.attackWithWeapon();
+        }
       }
 
       if (this.isAction('pause', e.code)) {
@@ -646,8 +716,12 @@ export class EchoGameEngine {
     const onClick = () => {
       if (this.state === 'playing') {
         if (this.mouseLocked) {
-          // Left click while pointer locked: emit passive echo
-          this.emitPassiveEcho();
+          // Left click while pointer locked: attack with weapon if equipped, otherwise emit passive echo
+          if (this.player.equippedWeapon) {
+            this.attackWithWeapon();
+          } else {
+            this.emitPassiveEcho();
+          }
         } else if (this.canvas) {
           this.canvas.requestPointerLock();
         }
@@ -1158,6 +1232,18 @@ export class EchoGameEngine {
         consumed = true;
         break;
       }
+      case 'combat_shoot':
+      case 'combat_flame':
+      case 'combat_burst':
+      case 'combat_grenade':
+      case 'combat_harpoon':
+      case 'combat_melee':
+      case 'combat_cannon': {
+        // Equip and attack with weapon
+        this.equipWeapon(item.id);
+        this.attackWithWeapon();
+        return; // attackWithWeapon handles uses consumption
+      }
       default: {
         // Generic consumable - just consume
         if (item.category === 'consumable') {
@@ -1347,6 +1433,343 @@ export class EchoGameEngine {
   }
 
   // ============================================================
+  // Combat System
+  // ============================================================
+
+  equipWeapon(weaponId: string) {
+    this.player.equippedWeapon = weaponId;
+  }
+
+  attackWithWeapon() {
+    const p = this.player;
+    if (!p.equippedWeapon || p.attackCooldown > 0) return;
+
+    // Find weapon in inventory
+    const slotIdx = p.inventory.findIndex(s => s.item.id === p.equippedWeapon);
+    if (slotIdx < 0) return;
+    const slot = p.inventory[slotIdx];
+    const weapon = slot.item;
+    const damage = weapon.value || 10;
+    const range = weapon.rangeOnUse || 10;
+
+    const effect = weapon.effect || '';
+
+    // Attack animation
+    p.isAttacking = true;
+    p.attackTimer = 0.2;
+
+    // Sound from weapon
+    if (weapon.noiseOnUse) {
+      this.addSoundEvent(p.pos, weapon.noiseOnUse, weapon.rangeOnUse || 5);
+    }
+
+    switch (effect) {
+      case 'combat_shoot': {
+        // Single shot - raycast to find closest entity in front of player within range
+        let closestEntity: Entity | null = null;
+        let closestDist = range;
+        for (const entity of this.entities) {
+          if (entity.state === 'dead') continue;
+          const dx = entity.pos.x - p.pos.x;
+          const dy = entity.pos.y - p.pos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > range) continue;
+
+          // Check if entity is roughly in front of player
+          const angle = Math.atan2(dy, dx) - p.dir;
+          let normAngle = angle;
+          while (normAngle > Math.PI) normAngle -= 2 * Math.PI;
+          while (normAngle < -Math.PI) normAngle += 2 * Math.PI;
+
+          // Spread based on weapon
+          const spread = weapon.id === 'pulse_shotgun' ? 0.4 : weapon.id === 'void_sniper' ? 0.05 : 0.15;
+          if (Math.abs(normAngle) > spread) continue;
+
+          if (this.hasLineOfSight(p.pos, entity.pos) && dist < closestDist) {
+            closestDist = dist;
+            closestEntity = entity;
+          }
+        }
+
+        // Shotgun: multiple pellets
+        if (weapon.id === 'pulse_shotgun') {
+          const pelletCount = 6;
+          const pelletDamage = damage / pelletCount;
+          const hitEntities: Entity[] = [];
+          for (const entity of this.entities) {
+            if (entity.state === 'dead') continue;
+            const dx = entity.pos.x - p.pos.x;
+            const dy = entity.pos.y - p.pos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > range) continue;
+            const angle = Math.atan2(dy, dx) - p.dir;
+            let normAngle = angle;
+            while (normAngle > Math.PI) normAngle -= 2 * Math.PI;
+            while (normAngle < -Math.PI) normAngle += 2 * Math.PI;
+            if (Math.abs(normAngle) > 0.5) continue;
+            if (this.hasLineOfSight(p.pos, entity.pos)) {
+              hitEntities.push(entity);
+            }
+          }
+          for (const entity of hitEntities) {
+            this.damageEntity(entity, pelletDamage * (1 + Math.random()));
+          }
+        } else if (closestEntity) {
+          this.damageEntity(closestEntity, damage);
+        }
+
+        // Set cooldown based on weapon type
+        if (weapon.id === 'echo_pistol') p.attackCooldown = 0.3;
+        else if (weapon.id === 'sonic_rifle') p.attackCooldown = 0.6;
+        else if (weapon.id === 'pulse_shotgun') p.attackCooldown = 0.8;
+        else if (weapon.id === 'void_sniper') p.attackCooldown = 1.2;
+        else p.attackCooldown = 0.4;
+        break;
+      }
+
+      case 'combat_flame': {
+        // Continuous damage - check entities in short range in front
+        for (const entity of this.entities) {
+          if (entity.state === 'dead') continue;
+          const dx = entity.pos.x - p.pos.x;
+          const dy = entity.pos.y - p.pos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > range) continue;
+          const angle = Math.atan2(dy, dx) - p.dir;
+          let normAngle = angle;
+          while (normAngle > Math.PI) normAngle -= 2 * Math.PI;
+          while (normAngle < -Math.PI) normAngle += 2 * Math.PI;
+          if (Math.abs(normAngle) > 0.5) continue;
+          if (this.hasLineOfSight(p.pos, entity.pos)) {
+            this.damageEntity(entity, damage);
+          }
+        }
+        p.attackCooldown = 0.1;
+        break;
+      }
+
+      case 'combat_burst': {
+        // Rapid fire with spread - deal damage to entities in front
+        for (const entity of this.entities) {
+          if (entity.state === 'dead') continue;
+          const dx = entity.pos.x - p.pos.x;
+          const dy = entity.pos.y - p.pos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > range) continue;
+          const angle = Math.atan2(dy, dx) - p.dir;
+          let normAngle = angle;
+          while (normAngle > Math.PI) normAngle -= 2 * Math.PI;
+          while (normAngle < -Math.PI) normAngle += 2 * Math.PI;
+          if (Math.abs(normAngle) > 0.35) continue;
+          if (this.hasLineOfSight(p.pos, entity.pos)) {
+            // Random hit chance for burst
+            if (Math.random() < 0.7) {
+              this.damageEntity(entity, damage);
+            }
+          }
+        }
+        p.attackCooldown = 0.15;
+        break;
+      }
+
+      case 'combat_grenade': {
+        // Area damage at point in front of player
+        const targetX = p.pos.x + Math.cos(p.dir) * Math.min(range, 8);
+        const targetY = p.pos.y + Math.sin(p.dir) * Math.min(range, 8);
+        const aoeRange = weapon.rangeOnUse || 4;
+        for (const entity of this.entities) {
+          if (entity.state === 'dead') continue;
+          const dist = this.dist(entity.pos, { x: targetX, y: targetY });
+          if (dist <= aoeRange) {
+            const distFade = 1 - dist / aoeRange;
+            this.damageEntity(entity, damage * distFade);
+          }
+        }
+        // Illumination at explosion point
+        this.illuminateArea({ x: targetX, y: targetY }, aoeRange, 1.0, '#ff6d00');
+        this.pulses.push({
+          origin: { x: targetX, y: targetY },
+          radius: aoeRange,
+          startTime: performance.now(),
+          duration: 400,
+          intensity: 0.8,
+        });
+        p.attackCooldown = 1.0;
+        break;
+      }
+
+      case 'combat_harpoon': {
+        // Hit entity + pull toward player slightly
+        let target: Entity | null = null;
+        let targetDist = range;
+        for (const entity of this.entities) {
+          if (entity.state === 'dead') continue;
+          const dx = entity.pos.x - p.pos.x;
+          const dy = entity.pos.y - p.pos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > range) continue;
+          const angle = Math.atan2(dy, dx) - p.dir;
+          let normAngle = angle;
+          while (normAngle > Math.PI) normAngle -= 2 * Math.PI;
+          while (normAngle < -Math.PI) normAngle += 2 * Math.PI;
+          if (Math.abs(normAngle) > 0.2) continue;
+          if (this.hasLineOfSight(p.pos, entity.pos) && dist < targetDist) {
+            targetDist = dist;
+            target = entity;
+          }
+        }
+        if (target) {
+          this.damageEntity(target, damage);
+          // Pull toward player
+          const pullAngle = Math.atan2(p.pos.y - target.pos.y, p.pos.x - target.pos.x);
+          const pullDist = Math.min(2, targetDist * 0.4);
+          const newX = target.pos.x + Math.cos(pullAngle) * pullDist;
+          const newY = target.pos.y + Math.sin(pullAngle) * pullDist;
+          if (isWalkable(this.map, newX, newY)) {
+            target.pos.x = newX;
+            target.pos.y = newY;
+          }
+        }
+        p.attackCooldown = 0.7;
+        break;
+      }
+
+      case 'combat_melee': {
+        // Close range, high damage
+        for (const entity of this.entities) {
+          if (entity.state === 'dead') continue;
+          const dist = this.dist(entity.pos, p.pos);
+          if (dist <= range) {
+            this.damageEntity(entity, damage);
+          }
+        }
+        p.attackCooldown = 0.5;
+        break;
+      }
+
+      case 'combat_cannon': {
+        // Massive damage, small AOE
+        const targetX = p.pos.x + Math.cos(p.dir) * Math.min(range, 10);
+        const targetY = p.pos.y + Math.sin(p.dir) * Math.min(range, 10);
+        const aoeRange = 3;
+        for (const entity of this.entities) {
+          if (entity.state === 'dead') continue;
+          const dist = this.dist(entity.pos, { x: targetX, y: targetY });
+          if (dist <= aoeRange) {
+            const distFade = 1 - dist / aoeRange;
+            this.damageEntity(entity, damage * distFade);
+          }
+        }
+        // Big illumination
+        this.illuminateArea({ x: targetX, y: targetY }, aoeRange * 2, 1.0, '#ff1744');
+        this.pulses.push({
+          origin: { x: targetX, y: targetY },
+          radius: aoeRange * 2,
+          startTime: performance.now(),
+          duration: 600,
+          intensity: 1.0,
+        });
+        // Big screen shake
+        this.shakeX = (Math.random() - 0.5) * 15;
+        this.shakeY = (Math.random() - 0.5) * 15;
+        this.shakeDecay = 500;
+        p.attackCooldown = 1.5;
+        break;
+      }
+
+      default:
+        return; // Unknown effect, don't consume uses
+    }
+
+    // Decrease uses
+    if (slot.uses !== undefined && slot.uses > 1) {
+      slot.uses--;
+    } else {
+      // Remove weapon from inventory
+      p.inventory.splice(slotIdx, 1);
+      p.equippedWeapon = null;
+    }
+  }
+
+  damageEntity(entity: Entity, damage: number) {
+    if (entity.state === 'dead') return;
+
+    // Abomination takes 20% less damage
+    if (entity.type === 'abomination') {
+      damage *= 0.8;
+    }
+
+    // Arachnid 20% chance to dodge
+    if (entity.type === 'arachnid' && Math.random() < 0.2) {
+      return; // Dodged!
+    }
+
+    entity.health -= damage;
+    entity.hitFlashTimer = 0.3;
+
+    // Sound event at entity position
+    this.addSoundEvent(entity.pos, 0.4, 5);
+
+    if (entity.health <= 0) {
+      entity.health = 0;
+      entity.state = 'dead';
+      entity.deathTimer = 1.0;
+
+      // Broodmother: kill all parasites
+      if (entity.type === 'broodmother') {
+        for (const parasiteId of entity.parasiteIds) {
+          const parasite = this.entities.find(e => e.id === parasiteId);
+          if (parasite && parasite.state !== 'dead') {
+            parasite.state = 'dead';
+            parasite.deathTimer = 0.5;
+          }
+        }
+      }
+    } else {
+      // On hit, set entity to chase state if not already
+      if (entity.state !== 'chase') {
+        entity.state = 'chase';
+        entity.stateTimer = 8;
+      }
+
+      // Whisperer teleports when hit
+      if (entity.type === 'whisperer') {
+        const offset = 5 + Math.random() * 3;
+        const angle = Math.random() * Math.PI * 2;
+        let newX = entity.pos.x + Math.cos(angle) * offset;
+        let newY = entity.pos.y + Math.sin(angle) * offset;
+        newX = Math.max(1, Math.min(this.map.width - 2, newX));
+        newY = Math.max(1, Math.min(this.map.height - 2, newY));
+        if (isWalkable(this.map, newX, newY)) {
+          entity.pos = { x: newX, y: newY };
+          this.addSoundEvent(entity.pos, 0.3, 5);
+        }
+      }
+
+      // Abomination: chance to enrage
+      if (entity.type === 'abomination' && Math.random() < 0.3) {
+        entity.isCharging = true; // Reuse isCharging for enraged state
+        entity.chargeTimer = 5;
+      }
+    }
+  }
+
+  damagePlayer(amount: number) {
+    const p = this.player;
+    p.health -= amount;
+    // Screen shake / glitch effect
+    this.glitchIntensity = Math.min(1, this.glitchIntensity + 0.3);
+    this.shakeX = (Math.random() - 0.5) * 8;
+    this.shakeY = (Math.random() - 0.5) * 8;
+    this.shakeDecay = 300;
+
+    if (p.health <= 0) {
+      p.health = 0;
+      this.playerDeath();
+    }
+  }
+
+  // ============================================================
   // Door interaction
   // ============================================================
 
@@ -1503,6 +1926,25 @@ export class EchoGameEngine {
     p.isMoving = false;
     p.isSneaking = this.isActionDown('sneak') || this.isCrouching || this.touchSneak;
 
+    // Combat cooldowns
+    if (p.attackCooldown > 0) p.attackCooldown -= dt;
+    if (p.webTimer > 0) {
+      p.webTimer -= dt;
+      if (p.webTimer <= 0) p.webbed = false;
+    }
+    if (p.paralyzeTimer > 0) {
+      p.paralyzeTimer -= dt;
+      if (p.paralyzeTimer <= 0) p.paralyzed = false;
+    }
+
+    // Attack animation
+    if (p.isAttacking) {
+      p.attackTimer -= dt;
+      if (p.attackTimer <= 0) {
+        p.isAttacking = false;
+      }
+    }
+
     // Crouch reduces echolocation range by 40%
     if (p.isSneaking) {
       this.passiveSonarRevealRadius = 1.5;
@@ -1527,6 +1969,15 @@ export class EchoGameEngine {
       return;
     }
 
+    // If paralyzed, prevent all movement
+    if (p.paralyzed) {
+      p.noiseLevel = 0;
+      if (this.soundDampenerTimer <= 0) {
+        // Nothing - paralyzed
+      }
+      return;
+    }
+
     const speed = p.isSneaking ? this.diffConfig.sneakSpeed : this.diffConfig.playerSpeed;
 
     // Apply touch look delta
@@ -1548,6 +1999,10 @@ export class EchoGameEngine {
     let effectiveSpeed = speed;
     if (this.isInWhiteNoiseZone) {
       effectiveSpeed = speed * 0.5;
+    }
+    // Webbed: reduce movement speed significantly
+    if (p.webbed) {
+      effectiveSpeed = speed * 0.25;
     }
 
     // Keyboard movement
@@ -1689,10 +2144,36 @@ export class EchoGameEngine {
   private updateEntities(dt: number) {
     const now = performance.now();
 
+    // Remove fully dead entities
+    this.entities = this.entities.filter(e => !(e.state === 'dead' && e.deathTimer <= 0));
+
     for (const entity of this.entities) {
       entity.animPhase += dt * 3;
       entity.stateTimer -= dt;
       entity.teleportCooldown = Math.max(0, entity.teleportCooldown - dt);
+
+      // Decrease hitFlashTimer
+      if (entity.hitFlashTimer > 0) entity.hitFlashTimer -= dt;
+
+      // Handle dead entities: just update death timer
+      if (entity.state === 'dead') {
+        entity.deathTimer -= dt;
+        continue;
+      }
+
+      // When stunned, skip AI update and decrease stunTimer
+      if (entity.stunTimer > 0) {
+        entity.stunTimer -= dt;
+        continue;
+      }
+
+      // Decrease type-specific timers
+      entity.webCooldown = Math.max(0, entity.webCooldown - dt);
+      entity.whisperTimer = Math.max(0, entity.whisperTimer - dt);
+      entity.illusionTimer = Math.max(0, entity.illusionTimer - dt);
+      entity.spawnTimer = Math.max(0, entity.spawnTimer - dt);
+      if (entity.chargeTimer > 0) entity.chargeTimer -= dt;
+      if (entity.chargeTimer <= 0) entity.isCharging = false;
 
       // Find best audible sound
       let bestSound: { pos: Vec2; volume: number } | null = null;
@@ -1712,6 +2193,14 @@ export class EchoGameEngine {
 
       const playerDist = this.dist(entity.pos, this.player.pos);
 
+      // When player makes noise above 0.3, ALL entities within hearing range should immediately enter chase state
+      if (this.player.noiseLevel > 0.3 && playerDist < entity.hearingRange) {
+        if (entity.state !== 'chase') {
+          entity.state = 'chase';
+          entity.stateTimer = 10;
+        }
+      }
+
       // Type-specific AI
       switch (entity.type) {
         case 'stalker':
@@ -1723,17 +2212,32 @@ export class EchoGameEngine {
         case 'phantom':
           this.updatePhantomAI(entity, dt, bestSound, bestVolume, playerDist, now);
           break;
+        case 'devourer':
+          this.updateDevourerAI(entity, dt, bestSound, bestVolume, playerDist, now);
+          break;
+        case 'abomination':
+          this.updateAbominationAI(entity, dt, bestSound, bestVolume, playerDist, now);
+          break;
+        case 'arachnid':
+          this.updateArachnidAI(entity, dt, bestSound, bestVolume, playerDist, now);
+          break;
+        case 'whisperer':
+          this.updateWhispererAI(entity, dt, bestSound, bestVolume, playerDist, now);
+          break;
+        case 'broodmother':
+          this.updateBroodmotherAI(entity, dt, bestSound, bestVolume, playerDist, now);
+          break;
       }
 
-      // Proximity detection - entity "feels" player
-      if (playerDist < 1.5 && entity.state !== 'chase') {
+      // Proximity detection - entity "feels" player (increased from 1.5 to 3.0)
+      if (playerDist < 3.0 && entity.state !== 'chase') {
         entity.state = 'chase';
-        entity.stateTimer = 6;
+        entity.stateTimer = 8;
       }
 
-      // Kill check
+      // Kill check - use entity damage for kill speed
       if (playerDist < this.diffConfig.killDistance) {
-        entity.killTimer += dt;
+        entity.killTimer += dt * (entity.damage / 25); // Higher damage = faster kill
         if (entity.killTimer > 0.4) {
           this.playerDeath();
           return;
@@ -1755,9 +2259,7 @@ export class EchoGameEngine {
       // Passive sonar: entities near the player create faint illumination (you can "hear" them breathing)
       if (this.sonarMode === 'passive' && playerDist < this.passiveEntityRevealRadius) {
         const revealIntensity = 0.25 * (1 - playerDist / this.passiveEntityRevealRadius);
-        const entityColor = entity.type === 'stalker' ? NEON_COLORS.stalkerGlow
-          : entity.type === 'hunter' ? NEON_COLORS.hunterGlow
-          : NEON_COLORS.phantomGlow;
+        const entityColor = ENEMY_TEMPLATES[entity.type]?.glowColor || NEON_COLORS.stalkerGlow;
         this.illuminateArea(entity.pos, 1.5, revealIntensity, entityColor);
       }
     }
@@ -2227,6 +2729,767 @@ export class EchoGameEngine {
 
     // Teleport sound
     this.addSoundEvent(entity.pos, 0.3, 5);
+  }
+
+  // ---- Devourer AI: Charges blindly, devastating, very persistent ----
+  private updateDevourerAI(
+    entity: Entity, dt: number,
+    bestSound: { pos: Vec2; volume: number } | null, bestVolume: number,
+    playerDist: number, now: number
+  ) {
+    const template = ENEMY_TEMPLATES.devourer;
+    const chaseSpeed = template.chaseSpeed * (this.diffConfig.entityChaseSpeed / 2.8);
+    const baseSpeed = entity.speed * 0.4;
+
+    switch (entity.state) {
+      case 'patrol': {
+        // Slow, but ALWAYS turns toward player sounds
+        if (bestSound && bestVolume > 0.05) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = bestSound.pos;
+          entity.lastHeardTime = now;
+          entity.stateTimer = 15;
+          break;
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.patrolAngle += (Math.random() - 0.5) * Math.PI;
+          entity.stateTimer = 3 + Math.random() * 5;
+        }
+
+        // Always turn toward player sounds even in patrol
+        if (this.player.noiseLevel > 0.1 && playerDist < entity.hearingRange) {
+          const toPlayerAngle = Math.atan2(
+            this.player.pos.y - entity.pos.y,
+            this.player.pos.x - entity.pos.x
+          );
+          entity.patrolAngle = toPlayerAngle;
+        }
+
+        this.moveEntity(entity, entity.patrolAngle, baseSpeed, dt);
+
+        const nextX = entity.pos.x + Math.cos(entity.patrolAngle) * 0.5;
+        const nextY = entity.pos.y + Math.sin(entity.patrolAngle) * 0.5;
+        if (!isWalkable(this.map, nextX, nextY)) {
+          entity.patrolAngle += Math.PI * 0.6 + Math.random() * Math.PI * 0.8;
+        }
+        break;
+      }
+
+      case 'investigate': {
+        if (bestSound && bestVolume > 0.05) {
+          entity.lastHeardSound = bestSound.pos;
+          entity.lastHeardTime = now;
+          entity.stateTimer = 15;
+        }
+
+        if (playerDist < 5) {
+          entity.state = 'chase';
+          entity.chargeTimer = 2; // 2s before charging starts
+          entity.isCharging = false;
+          entity.stateTimer = 15;
+          break;
+        }
+
+        if (entity.lastHeardSound) {
+          const soundDist = this.dist(entity.pos, entity.lastHeardSound);
+          if (soundDist < 1.0) {
+            entity.state = 'search';
+            entity.stateTimer = 5 + Math.random() * 3;
+          } else {
+            const angle = Math.atan2(
+              entity.lastHeardSound.y - entity.pos.y,
+              entity.lastHeardSound.x - entity.pos.x
+            );
+            this.moveEntity(entity, angle, entity.speed * 0.7, dt);
+          }
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 3;
+        }
+        break;
+      }
+
+      case 'search': {
+        entity.patrolAngle += dt * 0.8;
+        this.moveEntity(entity, entity.patrolAngle, baseSpeed * 0.5, dt);
+
+        if (bestSound && bestVolume > 0.1) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = bestSound.pos;
+          entity.stateTimer = 15;
+        }
+
+        if (playerDist < 5) {
+          entity.state = 'chase';
+          entity.chargeTimer = 2;
+          entity.stateTimer = 15;
+          break;
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 2;
+        }
+        break;
+      }
+
+      case 'chase': {
+        const playerAngle = Math.atan2(
+          this.player.pos.y - entity.pos.y,
+          this.player.pos.x - entity.pos.x
+        );
+
+        // After 2s of chase, start charging
+        entity.chargeTimer -= dt;
+        if (entity.chargeTimer <= 0 && !entity.isCharging) {
+          entity.isCharging = true;
+          entity.chargeTimer = 3; // Charge for 3s
+        }
+
+        if (entity.isCharging) {
+          // 2x chase speed but can't turn well
+          const currentAngle = Math.atan2(
+            Math.sin(entity.patrolAngle),
+            Math.cos(entity.patrolAngle)
+          );
+          // Slowly turn toward player
+          const turnSpeed = 0.5; // Can't turn well
+          let angleDiff = playerAngle - currentAngle;
+          while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+          while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+          entity.patrolAngle = currentAngle + Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), turnSpeed * dt);
+          this.moveEntity(entity, entity.patrolAngle, chaseSpeed * 2, dt);
+        } else {
+          this.moveEntity(entity, playerAngle, chaseSpeed, dt);
+          entity.patrolAngle = playerAngle;
+        }
+
+        // Very persistent - doesn't lose chase easily
+        if (playerDist < 8) {
+          entity.stateTimer = Math.max(entity.stateTimer, 12);
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = { ...this.player.pos };
+          entity.stateTimer = 10;
+        }
+        break;
+      }
+
+      case 'idle': {
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 3;
+        }
+        break;
+      }
+    }
+  }
+
+  // ---- Abomination AI: Corrosive trail, aura damage, tanky ----
+  private updateAbominationAI(
+    entity: Entity, dt: number,
+    bestSound: { pos: Vec2; volume: number } | null, bestVolume: number,
+    playerDist: number, now: number
+  ) {
+    const template = ENEMY_TEMPLATES.abomination;
+    const chaseSpeed = template.chaseSpeed * (this.diffConfig.entityChaseSpeed / 2.8);
+    const baseSpeed = entity.speed * 0.6;
+
+    // Enraged mode - faster chase speed
+    const enraged = entity.isCharging && entity.chargeTimer > 0;
+    const effectiveChaseSpeed = enraged ? chaseSpeed * 1.5 : chaseSpeed;
+
+    // Aura damages player if within 3 units
+    if (playerDist < 3 && entity.state === 'chase') {
+      this.damagePlayer(5 * dt);
+    }
+
+    switch (entity.state) {
+      case 'patrol': {
+        // Moderate speed, leaves corrosive trail (damage zones)
+        if (bestSound && bestVolume > 0.1) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = bestSound.pos;
+          entity.lastHeardTime = now;
+          entity.stateTimer = 10;
+          break;
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.patrolAngle += (Math.random() - 0.5) * Math.PI * 1.5;
+          entity.stateTimer = 2 + Math.random() * 4;
+        }
+
+        this.moveEntity(entity, entity.patrolAngle, baseSpeed, dt);
+
+        const nextX = entity.pos.x + Math.cos(entity.patrolAngle) * 0.5;
+        const nextY = entity.pos.y + Math.sin(entity.patrolAngle) * 0.5;
+        if (!isWalkable(this.map, nextX, nextY)) {
+          entity.patrolAngle += Math.PI * 0.6 + Math.random() * Math.PI;
+        }
+
+        // Corrosive trail: add sound event (simulates damage zone)
+        if (Math.random() < 0.05) {
+          this.addSoundEvent(entity.pos, 0.1, 1.5);
+        }
+        break;
+      }
+
+      case 'investigate': {
+        if (bestSound && bestVolume > 0.15) {
+          entity.lastHeardSound = bestSound.pos;
+          entity.lastHeardTime = now;
+          entity.stateTimer = 10;
+        }
+
+        if (playerDist < 5 && this.player.noiseLevel > 0.2) {
+          entity.state = 'chase';
+          entity.stateTimer = 12;
+          break;
+        }
+
+        if (entity.lastHeardSound) {
+          const soundDist = this.dist(entity.pos, entity.lastHeardSound);
+          if (soundDist < 1.0) {
+            entity.state = 'search';
+            entity.stateTimer = 5 + Math.random() * 3;
+          } else {
+            const angle = Math.atan2(
+              entity.lastHeardSound.y - entity.pos.y,
+              entity.lastHeardSound.x - entity.pos.x
+            );
+            this.moveEntity(entity, angle, entity.speed * 0.6, dt);
+          }
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 3;
+        }
+        break;
+      }
+
+      case 'search': {
+        entity.patrolAngle += dt * 1;
+        this.moveEntity(entity, entity.patrolAngle, baseSpeed * 0.5, dt);
+
+        if (bestSound && bestVolume > 0.15) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = bestSound.pos;
+          entity.stateTimer = 10;
+        }
+
+        if (playerDist < 4) {
+          entity.state = 'chase';
+          entity.stateTimer = 12;
+          break;
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 2;
+        }
+        break;
+      }
+
+      case 'chase': {
+        const playerAngle = Math.atan2(
+          this.player.pos.y - entity.pos.y,
+          this.player.pos.x - entity.pos.x
+        );
+        this.moveEntity(entity, playerAngle, effectiveChaseSpeed, dt);
+
+        // Steady relentless pursuit
+        if (playerDist < 6) {
+          entity.stateTimer = Math.max(entity.stateTimer, 8);
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = { ...this.player.pos };
+          entity.stateTimer = 8;
+        }
+        break;
+      }
+
+      case 'idle': {
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 3;
+        }
+        break;
+      }
+    }
+  }
+
+  // ---- Arachnid AI: Fastest, web attack, hit and run ----
+  private updateArachnidAI(
+    entity: Entity, dt: number,
+    bestSound: { pos: Vec2; volume: number } | null, bestVolume: number,
+    playerDist: number, now: number
+  ) {
+    const template = ENEMY_TEMPLATES.arachnid;
+    const chaseSpeed = template.chaseSpeed * (this.diffConfig.entityChaseSpeed / 2.8);
+    const baseSpeed = entity.speed * 1.0; // Fast patrol
+
+    // Web attack every 8 seconds
+    if (entity.webCooldown <= 0 && playerDist < 10 && playerDist > 2 && entity.state === 'chase') {
+      // Shoot web at player
+      entity.webCooldown = 8;
+      if (this.hasLineOfSight(entity.pos, this.player.pos) && Math.random() < 0.6) {
+        this.player.webbed = true;
+        this.player.webTimer = 3;
+      }
+    }
+
+    switch (entity.state) {
+      case 'patrol': {
+        // Fastest enemy
+        if (bestSound && bestVolume > 0.15) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = bestSound.pos;
+          entity.lastHeardTime = now;
+          entity.stateTimer = 4;
+          break;
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.patrolAngle += (Math.random() - 0.5) * Math.PI * 2;
+          entity.stateTimer = 1 + Math.random() * 2;
+        }
+
+        this.moveEntity(entity, entity.patrolAngle, baseSpeed, dt);
+
+        const nextX = entity.pos.x + Math.cos(entity.patrolAngle) * 0.5;
+        const nextY = entity.pos.y + Math.sin(entity.patrolAngle) * 0.5;
+        if (!isWalkable(this.map, nextX, nextY)) {
+          entity.patrolAngle += Math.PI * 0.7 + Math.random() * Math.PI;
+        }
+        break;
+      }
+
+      case 'investigate': {
+        if (bestSound && bestVolume > 0.2) {
+          entity.lastHeardSound = bestSound.pos;
+          entity.lastHeardTime = now;
+          entity.stateTimer = 4;
+        }
+
+        if (playerDist < 6 && this.player.noiseLevel > 0.2) {
+          entity.state = 'chase';
+          entity.stateTimer = 5;
+          break;
+        }
+
+        if (entity.lastHeardSound) {
+          const soundDist = this.dist(entity.pos, entity.lastHeardSound);
+          if (soundDist < 1.0) {
+            entity.state = 'search';
+            entity.stateTimer = 2 + Math.random() * 2;
+          } else {
+            const angle = Math.atan2(
+              entity.lastHeardSound.y - entity.pos.y,
+              entity.lastHeardSound.x - entity.pos.x
+            );
+            this.moveEntity(entity, angle, entity.speed * 1.2, dt);
+          }
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 1;
+        }
+        break;
+      }
+
+      case 'search': {
+        entity.patrolAngle += dt * 2;
+        this.moveEntity(entity, entity.patrolAngle, baseSpeed * 0.6, dt);
+
+        if (bestSound && bestVolume > 0.2) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = bestSound.pos;
+          entity.stateTimer = 4;
+        }
+
+        if (playerDist < 3) {
+          entity.state = 'chase';
+          entity.stateTimer = 5;
+          break;
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 1;
+        }
+        break;
+      }
+
+      case 'chase': {
+        const playerAngle = Math.atan2(
+          this.player.pos.y - entity.pos.y,
+          this.player.pos.x - entity.pos.x
+        );
+        this.moveEntity(entity, playerAngle, chaseSpeed, dt);
+
+        // Hit and run: after getting close, retreat to patrol
+        if (playerDist < 2) {
+          // Attack and retreat
+          if (entity.stateTimer < 3) {
+            entity.state = 'patrol';
+            entity.stateTimer = 3 + Math.random() * 3;
+            entity.patrolAngle = playerAngle + Math.PI + (Math.random() - 0.5) * Math.PI;
+          }
+        }
+
+        if (playerDist < 5) {
+          entity.stateTimer = Math.max(entity.stateTimer, 4);
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 2;
+        }
+        break;
+      }
+
+      case 'idle': {
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 1;
+        }
+        break;
+      }
+    }
+  }
+
+  // ---- Whisperer AI: Invisible, paralyzes, teleports when hit, creates illusions ----
+  private updateWhispererAI(
+    entity: Entity, dt: number,
+    bestSound: { pos: Vec2; volume: number } | null, bestVolume: number,
+    playerDist: number, now: number
+  ) {
+    const template = ENEMY_TEMPLATES.whisperer;
+    const chaseSpeed = template.chaseSpeed * (this.diffConfig.entityChaseSpeed / 2.8);
+
+    // Whisper attack: when within 6 units, paralyze player
+    if (playerDist < 6 && entity.state === 'chase' && entity.whisperTimer <= 0) {
+      entity.whisperTimer = 8;
+      if (this.hasLineOfSight(entity.pos, this.player.pos)) {
+        this.player.paralyzed = true;
+        this.player.paralyzeTimer = 2;
+      }
+    }
+
+    // Illusion timer - creates fake visual duplicates
+    if (entity.illusionTimer <= 0 && entity.state === 'chase') {
+      entity.illusionTimer = 5 + Math.random() * 5;
+    }
+
+    switch (entity.state) {
+      case 'patrol': {
+        // Almost invisible when not chasing (harder to see on echolocation)
+        if (bestSound && bestVolume > 0.05 && entity.teleportCooldown <= 0) {
+          // Teleport near sound source
+          const offset = 4 + Math.random() * 3;
+          const angle = Math.random() * Math.PI * 2;
+          let newX = bestSound.pos.x + Math.cos(angle) * offset;
+          let newY = bestSound.pos.y + Math.sin(angle) * offset;
+          newX = Math.max(1, Math.min(this.map.width - 2, newX));
+          newY = Math.max(1, Math.min(this.map.height - 2, newY));
+          if (isWalkable(this.map, newX, newY)) {
+            entity.pos = { x: newX, y: newY };
+            this.addSoundEvent(entity.pos, 0.2, 4);
+          }
+          entity.state = 'search';
+          entity.stateTimer = 4;
+          entity.teleportCooldown = 10;
+          break;
+        }
+
+        if (bestSound && bestVolume > 0.1) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = bestSound.pos;
+          entity.lastHeardTime = now;
+          entity.stateTimer = 8;
+          break;
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.patrolAngle += (Math.random() - 0.5) * Math.PI;
+          entity.stateTimer = 4 + Math.random() * 5;
+        }
+
+        this.moveEntity(entity, entity.patrolAngle, entity.speed * 0.3, dt);
+
+        const nextX = entity.pos.x + Math.cos(entity.patrolAngle) * 0.5;
+        const nextY = entity.pos.y + Math.sin(entity.patrolAngle) * 0.5;
+        if (!isWalkable(this.map, nextX, nextY)) {
+          entity.patrolAngle += Math.PI * 0.5 + Math.random() * Math.PI;
+        }
+        break;
+      }
+
+      case 'investigate': {
+        if (bestSound && bestVolume > 0.15) {
+          entity.lastHeardSound = bestSound.pos;
+          entity.lastHeardTime = now;
+          entity.stateTimer = 8;
+        }
+
+        if (playerDist < 8) {
+          entity.state = 'chase';
+          entity.stateTimer = 8;
+          break;
+        }
+
+        if (entity.lastHeardSound) {
+          const soundDist = this.dist(entity.pos, entity.lastHeardSound);
+          if (soundDist < 1.0) {
+            entity.state = 'search';
+            entity.stateTimer = 3 + Math.random() * 2;
+          } else {
+            const angle = Math.atan2(
+              entity.lastHeardSound.y - entity.pos.y,
+              entity.lastHeardSound.x - entity.pos.x
+            );
+            this.moveEntity(entity, angle, entity.speed * 0.5, dt);
+          }
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 4;
+        }
+        break;
+      }
+
+      case 'search': {
+        entity.patrolAngle += dt * 1.5;
+        this.moveEntity(entity, entity.patrolAngle, entity.speed * 0.3, dt);
+
+        if (playerDist < 6) {
+          entity.state = 'chase';
+          entity.stateTimer = 8;
+          break;
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 4;
+        }
+        break;
+      }
+
+      case 'chase': {
+        const playerAngle = Math.atan2(
+          this.player.pos.y - entity.pos.y,
+          this.player.pos.x - entity.pos.x
+        );
+        this.moveEntity(entity, playerAngle, chaseSpeed, dt);
+
+        if (playerDist < 8) {
+          entity.stateTimer = Math.max(entity.stateTimer, 6);
+        }
+
+        if (entity.stateTimer <= 0) {
+          // Disappear - teleport away
+          entity.state = 'idle';
+          entity.stateTimer = 4 + Math.random() * 4;
+          const farSpawns = findEntitySpawnPositions(this.map, 1, this.player.pos, 10);
+          if (farSpawns.length > 0) {
+            entity.pos = { ...farSpawns[0] };
+          }
+        }
+        break;
+      }
+
+      case 'idle': {
+        // Invisible
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 4;
+        }
+        break;
+      }
+    }
+  }
+
+  // ---- Broodmother AI: Very slow, very tanky, spawns parasites ----
+  private updateBroodmotherAI(
+    entity: Entity, dt: number,
+    bestSound: { pos: Vec2; volume: number } | null, bestVolume: number,
+    playerDist: number, now: number
+  ) {
+    const template = ENEMY_TEMPLATES.broodmother;
+    const chaseSpeed = template.chaseSpeed * (this.diffConfig.entityChaseSpeed / 2.8);
+    const baseSpeed = entity.speed * 0.3;
+
+    // Spawn parasite every 10 seconds
+    if (entity.spawnTimer <= 0 && entity.state !== 'dead') {
+      entity.spawnTimer = 10;
+      // Spawn a parasite (stalker template but with 15 HP and fast speed)
+      const stalkerTemplate = ENEMY_TEMPLATES.stalker;
+      const parasite: Entity = {
+        id: this.nextEntityId++,
+        type: 'stalker',
+        pos: { x: entity.pos.x + (Math.random() - 0.5) * 2, y: entity.pos.y + (Math.random() - 0.5) * 2 },
+        targetPos: null,
+        state: 'chase',
+        speed: stalkerTemplate.baseSpeed * 2 * (this.diffConfig.entityBaseSpeed / 1.0),
+        hearingRange: 20,
+        lastHeardSound: { ...this.player.pos },
+        lastHeardTime: now,
+        stateTimer: 10,
+        patrolAngle: Math.random() * Math.PI * 2,
+        animPhase: Math.random() * Math.PI * 2,
+        killTimer: 0,
+        health: 15,
+        maxHealth: 15,
+        stunTimer: 0,
+        hitFlashTimer: 0,
+        deathTimer: 0,
+        damage: 10,
+        teleportCooldown: 0,
+        isTeleporting: false,
+        teleportTimer: 0,
+        rushTimer: 0,
+        persistenceTimer: 0,
+        chargeTimer: 0,
+        isCharging: false,
+        webCooldown: 0,
+        whisperTimer: 0,
+        illusionTimer: 0,
+        spawnTimer: 0,
+        parasiteIds: [],
+      };
+      // Verify spawn position is walkable
+      if (isWalkable(this.map, parasite.pos.x, parasite.pos.y)) {
+        this.entities.push(parasite);
+        entity.parasiteIds.push(parasite.id);
+      }
+    }
+
+    // Area denial: bile puddles (simulated with damage to player when close)
+    if (playerDist < 2.5 && entity.state !== 'dead') {
+      this.damagePlayer(8 * dt);
+    }
+
+    switch (entity.state) {
+      case 'patrol': {
+        if (bestSound && bestVolume > 0.1) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = bestSound.pos;
+          entity.lastHeardTime = now;
+          entity.stateTimer = 12;
+          break;
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.patrolAngle += (Math.random() - 0.5) * Math.PI * 0.8;
+          entity.stateTimer = 3 + Math.random() * 6;
+        }
+
+        this.moveEntity(entity, entity.patrolAngle, baseSpeed, dt);
+
+        const nextX = entity.pos.x + Math.cos(entity.patrolAngle) * 0.5;
+        const nextY = entity.pos.y + Math.sin(entity.patrolAngle) * 0.5;
+        if (!isWalkable(this.map, nextX, nextY)) {
+          entity.patrolAngle += Math.PI * 0.5 + Math.random() * Math.PI;
+        }
+        break;
+      }
+
+      case 'investigate': {
+        if (bestSound && bestVolume > 0.1) {
+          entity.lastHeardSound = bestSound.pos;
+          entity.lastHeardTime = now;
+          entity.stateTimer = 12;
+        }
+
+        if (playerDist < 6) {
+          entity.state = 'chase';
+          entity.stateTimer = 15;
+          break;
+        }
+
+        if (entity.lastHeardSound) {
+          const soundDist = this.dist(entity.pos, entity.lastHeardSound);
+          if (soundDist < 1.0) {
+            entity.state = 'search';
+            entity.stateTimer = 5 + Math.random() * 3;
+          } else {
+            const angle = Math.atan2(
+              entity.lastHeardSound.y - entity.pos.y,
+              entity.lastHeardSound.x - entity.pos.x
+            );
+            this.moveEntity(entity, angle, entity.speed * 0.5, dt);
+          }
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 3;
+        }
+        break;
+      }
+
+      case 'search': {
+        entity.patrolAngle += dt * 0.5;
+        this.moveEntity(entity, entity.patrolAngle, baseSpeed * 0.3, dt);
+
+        if (bestSound && bestVolume > 0.1) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = bestSound.pos;
+          entity.stateTimer = 12;
+        }
+
+        if (playerDist < 4) {
+          entity.state = 'chase';
+          entity.stateTimer = 15;
+          break;
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 3;
+        }
+        break;
+      }
+
+      case 'chase': {
+        const playerAngle = Math.atan2(
+          this.player.pos.y - entity.pos.y,
+          this.player.pos.x - entity.pos.x
+        );
+        this.moveEntity(entity, playerAngle, chaseSpeed, dt);
+
+        // Very persistent
+        if (playerDist < 8) {
+          entity.stateTimer = Math.max(entity.stateTimer, 10);
+        }
+
+        if (entity.stateTimer <= 0) {
+          entity.state = 'investigate';
+          entity.lastHeardSound = { ...this.player.pos };
+          entity.stateTimer = 10;
+        }
+        break;
+      }
+
+      case 'idle': {
+        if (entity.stateTimer <= 0) {
+          entity.state = 'patrol';
+          entity.stateTimer = 3;
+        }
+        break;
+      }
+    }
   }
 
   // ============================================================
@@ -3101,8 +4364,8 @@ export class EchoGameEngine {
     const fovRad = (this.advanced.fov * Math.PI) / 180;
 
     for (const entity of sortedEntities) {
-      // Phantom idle/teleporting is invisible
-      if (entity.state === 'idle' || entity.isTeleporting) continue;
+      // Phantom idle/teleporting/dead is invisible
+      if (entity.state === 'idle' || entity.isTeleporting || entity.state === 'dead') continue;
 
       const dx = entity.pos.x - p.pos.x;
       const dy = entity.pos.y - p.pos.y;
@@ -3196,9 +4459,10 @@ export class EchoGameEngine {
 
       // Get entity type colors
       const template = ENEMY_TEMPLATES[entity.type];
-      const entityColor = template.color;
-      const glowColor = template.glowColor;
-      const eyeColor = template.eyeColor;
+      // Hit flash: render in bright white instead of normal color
+      const entityColor = entity.hitFlashTimer > 0 ? '#ffffff' : template.color;
+      const glowColor = entity.hitFlashTimer > 0 ? '#ffffff' : template.glowColor;
+      const eyeColor = entity.hitFlashTimer > 0 ? '#ffffff' : template.eyeColor;
 
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -4019,6 +5283,658 @@ export class EchoGameEngine {
         ctx.fill();
       }
 
+      // ========== DEVOURER: Massive hulking shape with curved horns ==========
+      else if (entity.type === 'devourer') {
+        const scale = 1.8;
+        const sH = spriteHeight * scale;
+        const sW = spriteWidth * scale;
+        const baseY = drawY - spriteHeight * 0.4;
+
+        const jx = () => (Math.random() - 0.5) * sW * 0.02 * (1 + chaseFactor);
+        const jy = () => (Math.random() - 0.5) * sH * 0.01 * (1 + chaseFactor);
+
+        // Dark red aura
+        ctx.fillStyle = this.colorWithAlpha('#8b0000', alpha * 0.08 * (1 + chaseFactor * 0.5));
+        ctx.shadowColor = '#8b0000';
+        ctx.shadowBlur = 60;
+        ctx.beginPath();
+        ctx.ellipse(cx, baseY + sH * 0.45, sW * 0.7, sH * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Reptilian head with curved horns
+        const headCX = cx + Math.sin(anim * 0.5) * sW * 0.03;
+        const headCY = baseY + sH * 0.08;
+        const headW = sW * 0.18;
+        const headH = sW * 0.15;
+
+        ctx.strokeStyle = entityColor;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 25;
+        ctx.lineWidth = 2;
+
+        // Skull
+        ctx.beginPath();
+        ctx.moveTo(headCX - headW, headCY - headH * 0.3);
+        ctx.lineTo(headCX - headW * 0.6, headCY - headH);
+        ctx.lineTo(headCX + headW * 0.6, headCY - headH);
+        ctx.lineTo(headCX + headW, headCY - headH * 0.3);
+        ctx.lineTo(headCX + headW * 0.5, headCY + headH * 0.5);
+        ctx.lineTo(headCX - headW * 0.5, headCY + headH * 0.5);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Curved horns
+        ctx.lineWidth = 2.5;
+        for (const side of [-1, 1]) {
+          const hornBaseX = headCX + side * headW * 0.7;
+          const hornBaseY = headCY - headH * 0.5;
+          const hornTipX = hornBaseX + side * sW * 0.15;
+          const hornTipY = hornBaseY - sH * 0.12;
+          ctx.beginPath();
+          ctx.moveTo(hornBaseX, hornBaseY);
+          ctx.quadraticCurveTo(hornBaseX + side * sW * 0.08, hornBaseY - sH * 0.08, hornTipX, hornTipY);
+          ctx.stroke();
+        }
+
+        // Glowing amber eyes
+        ctx.fillStyle = this.colorWithAlpha(eyeColor, alpha * (0.8 + Math.sin(anim * 3) * 0.2));
+        ctx.shadowColor = eyeColor;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(headCX - headW * 0.3, headCY - headH * 0.1, sW * 0.025, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(headCX + headW * 0.3, headCY - headH * 0.1, sW * 0.025, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Massive torso
+        ctx.strokeStyle = entityColor;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 20;
+        ctx.lineWidth = 2;
+        const torsoTop = headCY + headH * 0.6;
+        const torsoBot = baseY + sH * 0.5;
+        const torsoW = sW * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(cx - torsoW, torsoTop);
+        ctx.quadraticCurveTo(cx - torsoW * 1.1, (torsoTop + torsoBot) / 2, cx - torsoW * 0.8, torsoBot);
+        ctx.lineTo(cx + torsoW * 0.8, torsoBot);
+        ctx.quadraticCurveTo(cx + torsoW * 1.1, (torsoTop + torsoBot) / 2, cx + torsoW, torsoTop);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Ribs
+        if (detailLevel >= 2) {
+          ctx.lineWidth = 1;
+          for (let r = 0; r < 5; r++) {
+            const ribY = torsoTop + (torsoBot - torsoTop) * ((r + 1) / 6);
+            ctx.strokeStyle = this.colorWithAlpha('#b71c1c', alpha * 0.6);
+            ctx.beginPath();
+            ctx.moveTo(cx - torsoW * 0.7 + jx(), ribY + jy());
+            ctx.quadraticCurveTo(cx, ribY - sW * 0.03, cx + torsoW * 0.7 + jx(), ribY + jy());
+            ctx.stroke();
+          }
+          ctx.strokeStyle = entityColor;
+        }
+
+        // Massive arms
+        ctx.lineWidth = 2;
+        for (const side of [-1, 1]) {
+          const shoulderX = cx + side * torsoW;
+          const shoulderY = torsoTop + sH * 0.03;
+          const elbowX = shoulderX + side * sW * 0.2 + Math.sin(anim + side) * sW * 0.04;
+          const elbowY = shoulderY + (torsoBot - torsoTop) * 0.4;
+          const clawX = elbowX + side * sW * 0.05 + Math.sin(anim * 1.5 + side) * sW * 0.05;
+          const clawY = isChase ? torsoBot + sH * 0.1 : elbowY + sH * 0.1;
+          ctx.beginPath();
+          ctx.moveTo(shoulderX, shoulderY);
+          ctx.lineTo(elbowX + jx(), elbowY + jy());
+          ctx.lineTo(clawX + jx(), clawY + jy());
+          ctx.stroke();
+
+          // Claws
+          if (detailLevel >= 2) {
+            ctx.lineWidth = 1;
+            for (let c = 0; c < 3; c++) {
+              const cAngle = side * (0.3 + c * 0.4);
+              const cLen = sW * 0.06;
+              ctx.beginPath();
+              ctx.moveTo(clawX, clawY);
+              ctx.lineTo(clawX + Math.cos(cAngle) * cLen, clawY + Math.sin(cAngle) * cLen);
+              ctx.stroke();
+            }
+            ctx.lineWidth = 2;
+          }
+        }
+
+        // Whip-like tail
+        ctx.lineWidth = 1.5;
+        const tailBase = { x: cx, y: torsoBot };
+        const tailMid = {
+          x: cx + Math.sin(anim * 1.2) * sW * 0.2,
+          y: torsoBot + sH * 0.15
+        };
+        const tailTip = {
+          x: cx + Math.sin(anim * 1.8) * sW * 0.35,
+          y: torsoBot + sH * 0.05 + Math.sin(anim * 2) * sH * 0.05
+        };
+        ctx.beginPath();
+        ctx.moveTo(tailBase.x, tailBase.y);
+        ctx.quadraticCurveTo(tailMid.x, tailMid.y, tailTip.x, tailTip.y);
+        ctx.stroke();
+
+        // Charging visual
+        if (entity.isCharging) {
+          ctx.strokeStyle = this.colorWithAlpha('#ffab00', alpha * (0.3 + Math.sin(anim * 8) * 0.3));
+          ctx.lineWidth = 3;
+          ctx.shadowColor = '#ffab00';
+          ctx.shadowBlur = 30;
+          ctx.beginPath();
+          ctx.ellipse(cx, baseY + sH * 0.35, sW * 0.5, sH * 0.3, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      // ========== ABOMINATION: Corrupted body with exposed bones/ribs ==========
+      else if (entity.type === 'abomination') {
+        const sH = spriteHeight * 1.2;
+        const sW = spriteWidth * 1.0;
+        const baseY = drawY - spriteHeight * 0.1;
+
+        const jx = () => (Math.random() - 0.5) * sW * 0.02 * (1 + chaseFactor);
+        const jy = () => (Math.random() - 0.5) * sH * 0.01 * (1 + chaseFactor);
+
+        // Deep purple aura
+        ctx.fillStyle = this.colorWithAlpha('#4a148c', alpha * 0.1 * (1 + chaseFactor));
+        ctx.shadowColor = '#7b1fa2';
+        ctx.shadowBlur = 50;
+        ctx.beginPath();
+        ctx.ellipse(cx, baseY + sH * 0.4, sW * 0.6, sH * 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Asymmetrical body shape
+        const headCX = cx + Math.sin(anim * 0.4) * sW * 0.03;
+        const headCY = baseY + sH * 0.08;
+        const headW = sW * 0.12;
+        const headH = sW * 0.1;
+
+        // Bone-white twisted horns
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.shadowColor = '#ffd600';
+        ctx.shadowBlur = 15;
+        ctx.lineWidth = 2;
+
+        // Left horn (twisted)
+        ctx.beginPath();
+        ctx.moveTo(headCX - headW * 0.8, headCY - headH * 0.5);
+        ctx.bezierCurveTo(
+          headCX - sW * 0.15, headCY - sH * 0.1,
+          headCX - sW * 0.1, headCY - sH * 0.15,
+          headCX - sW * 0.05, headCY - sH * 0.08
+        );
+        ctx.stroke();
+
+        // Right horn (different shape)
+        ctx.beginPath();
+        ctx.moveTo(headCX + headW * 0.8, headCY - headH * 0.5);
+        ctx.bezierCurveTo(
+          headCX + sW * 0.2, headCY - sH * 0.12,
+          headCX + sW * 0.15, headCY - sH * 0.18,
+          headCX + sW * 0.08, headCY - sH * 0.06
+        );
+        ctx.stroke();
+
+        // Head
+        ctx.strokeStyle = entityColor;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 20;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.ellipse(headCX, headCY, headW, headH, Math.sin(anim * 0.3) * 0.2, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Molten gold eyes
+        ctx.fillStyle = this.colorWithAlpha(eyeColor, alpha * 0.9);
+        ctx.shadowColor = eyeColor;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(headCX - headW * 0.3, headCY, sW * 0.02, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(headCX + headW * 0.3, headCY, sW * 0.02, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Exposed ribs/corrupted torso
+        const torsoTop = headCY + headH;
+        const torsoBot = baseY + sH * 0.55;
+        const torsoW = sW * 0.22;
+
+        ctx.strokeStyle = entityColor;
+        ctx.lineWidth = 2;
+        // Asymmetrical body outline
+        ctx.beginPath();
+        ctx.moveTo(cx - torsoW * 1.2, torsoTop);
+        ctx.quadraticCurveTo(cx - torsoW * 1.3 + Math.sin(anim * 0.8) * sW * 0.02, (torsoTop + torsoBot) / 2, cx - torsoW * 0.7, torsoBot);
+        ctx.lineTo(cx + torsoW * 0.9, torsoBot);
+        ctx.quadraticCurveTo(cx + torsoW * 1.1 + Math.sin(anim) * sW * 0.02, (torsoTop + torsoBot) / 2, cx + torsoW * 0.8, torsoTop);
+        ctx.stroke();
+
+        // Exposed bones
+        if (detailLevel >= 2) {
+          ctx.strokeStyle = this.colorWithAlpha('#e0e0e0', alpha * 0.7);
+          ctx.lineWidth = 1.2;
+          const ribCount = detailLevel >= 3 ? 6 : 4;
+          for (let r = 0; r < ribCount; r++) {
+            const ribT = (r + 1) / (ribCount + 1);
+            const ribY = torsoTop + (torsoBot - torsoTop) * ribT;
+            const ribW = torsoW * (1.2 - ribT * 0.3) * (1 + (r % 2) * 0.2);
+            ctx.beginPath();
+            ctx.moveTo(cx - ribW + jx(), ribY + jy());
+            ctx.quadraticCurveTo(cx, ribY - sW * 0.03, cx + ribW * 0.8 + jx(), ribY + jy());
+            ctx.stroke();
+          }
+          ctx.strokeStyle = entityColor;
+          ctx.lineWidth = 2;
+        }
+
+        // Glowing runes on skin
+        if (detailLevel >= 2) {
+          ctx.fillStyle = this.colorWithAlpha('#ffd600', alpha * (0.3 + Math.sin(anim * 2) * 0.2));
+          ctx.shadowColor = '#ffd600';
+          ctx.shadowBlur = 10;
+          for (let i = 0; i < 4; i++) {
+            const rx = cx + Math.sin(anim * 0.8 + i * 2.5) * torsoW * 0.5;
+            const ry = torsoTop + (torsoBot - torsoTop) * (0.2 + i * 0.2);
+            ctx.beginPath();
+            ctx.arc(rx, ry, sW * 0.015, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Dripping corrosive mass
+        ctx.strokeStyle = this.colorWithAlpha('#7b1fa2', alpha * 0.5);
+        ctx.shadowColor = '#7b1fa2';
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 1.2;
+        const massBot = baseY + sH * 0.85;
+        for (let d = 0; d < 5; d++) {
+          const dt2 = d / 4;
+          const dX = cx - torsoW + torsoW * 2 * dt2;
+          const dLen = (massBot - torsoBot) * (0.3 + 0.5 * Math.sin(anim * 0.7 + d * 1.9));
+          const dSway = Math.sin(anim * 1.3 + d * 2.2) * sW * 0.04;
+          ctx.beginPath();
+          ctx.moveTo(dX, torsoBot);
+          ctx.quadraticCurveTo(dX + dSway, torsoBot + dLen * 0.5, dX + dSway * 0.6, torsoBot + dLen);
+          ctx.stroke();
+        }
+
+        // Enraged indicator
+        if (entity.isCharging && entity.chargeTimer > 0) {
+          ctx.strokeStyle = this.colorWithAlpha('#ffd600', alpha * (0.5 + Math.sin(anim * 6) * 0.3));
+          ctx.lineWidth = 3;
+          ctx.shadowColor = '#ffd600';
+          ctx.shadowBlur = 25;
+          ctx.beginPath();
+          ctx.ellipse(cx, (torsoTop + torsoBot) / 2, torsoW * 1.2, (torsoBot - torsoTop) * 0.5, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      // ========== ARACHNID: Spider-like body with 8 legs ==========
+      else if (entity.type === 'arachnid') {
+        const sH = spriteHeight * 0.7;
+        const sW = spriteWidth * 1.4;
+        const baseY = drawY + spriteHeight * 0.15;
+
+        // Dark green glow
+        ctx.fillStyle = this.colorWithAlpha('#1b5e20', alpha * 0.08 * (1 + chaseFactor));
+        ctx.shadowColor = '#2e7d32';
+        ctx.shadowBlur = 40;
+        ctx.beginPath();
+        ctx.ellipse(cx, baseY + sH * 0.4, sW * 0.6, sH * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Spider body - oval abdomen
+        ctx.strokeStyle = entityColor;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 20;
+        ctx.lineWidth = 2;
+
+        // Abdomen
+        const abdCX = cx;
+        const abdCY = baseY + sH * 0.35;
+        const abdW = sW * 0.25;
+        const abdH = sW * 0.18;
+        ctx.beginPath();
+        ctx.ellipse(abdCX, abdCY, abdW, abdH, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Cephalothorax (front body)
+        const cephCX = cx - sW * 0.15;
+        const cephCY = baseY + sH * 0.25;
+        const cephW = sW * 0.12;
+        const cephH = sW * 0.1;
+        ctx.beginPath();
+        ctx.ellipse(cephCX, cephCY, cephW, cephH, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Humanoid face in center
+        ctx.fillStyle = this.colorWithAlpha(eyeColor, alpha * (0.6 + Math.sin(anim * 3) * 0.3));
+        ctx.shadowColor = eyeColor;
+        ctx.shadowBlur = 12;
+        // Two eyes
+        ctx.beginPath();
+        ctx.arc(cephCX - cephW * 0.3, cephCY - cephH * 0.2, sW * 0.015, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cephCX + cephW * 0.3, cephCY - cephH * 0.2, sW * 0.015, 0, Math.PI * 2);
+        ctx.fill();
+        // Mouth
+        ctx.strokeStyle = this.colorWithAlpha(eyeColor, alpha * 0.5);
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(cephCX, cephCY + cephH * 0.2, cephW * 0.3, 0, Math.PI);
+        ctx.stroke();
+
+        // 8 legs - jittery movement
+        ctx.strokeStyle = entityColor;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 15;
+        ctx.lineWidth = 1.5;
+        for (let leg = 0; leg < 8; leg++) {
+          const side = leg < 4 ? -1 : 1;
+          const legIdx = leg % 4;
+          const hipX = legIdx < 2 ? cephCX + side * cephW : abdCX + side * abdW * 0.8;
+          const hipY = legIdx < 2 ? cephCY : abdCY;
+
+          // Jittery fast movement
+          const legPhase = anim * (3 + leg * 0.5) + leg * Math.PI * 0.5;
+          const kneeX = hipX + side * (sW * 0.12 + legIdx * sW * 0.03) + Math.sin(legPhase) * sW * 0.04;
+          const kneeY = hipY + sH * 0.08 + Math.sin(legPhase + 1) * sH * 0.03;
+          const footX = kneeX + side * sW * 0.04 + Math.sin(legPhase * 0.8) * sW * 0.03;
+          const footY = baseY + sH * 0.6 + Math.sin(legPhase * 0.6) * sH * 0.03;
+
+          ctx.beginPath();
+          ctx.moveTo(hipX, hipY);
+          ctx.lineTo(kneeX, kneeY);
+          ctx.lineTo(footX, footY);
+          ctx.stroke();
+        }
+
+        // Web attack visual
+        if (entity.webCooldown > 6) {
+          ctx.strokeStyle = this.colorWithAlpha('#ffffff', alpha * 0.3);
+          ctx.lineWidth = 1;
+          const webAngle = Math.atan2(this.player.pos.y - entity.pos.y, this.player.pos.x - entity.pos.x) - this.player.dir;
+          ctx.beginPath();
+          ctx.moveTo(cx, baseY + sH * 0.3);
+          ctx.lineTo(cx + Math.sin(webAngle) * sW * 0.5, baseY + sH * 0.3 + Math.cos(webAngle) * sH * 0.3);
+          ctx.stroke();
+        }
+      }
+
+      // ========== WHISPERER: Made of static/noise, faceless ==========
+      else if (entity.type === 'whisperer') {
+        const sH = spriteHeight * 1.0;
+        const sW = spriteWidth * 0.8;
+        const baseY = drawY;
+
+        // Flickering visibility
+        const flickerPhase = Math.sin(anim * 2.3);
+        const isVisible = flickerPhase > -0.5 || isChase;
+        const bodyAlpha = isVisible ? alpha : alpha * 0.1;
+
+        // TV-static texture particles
+        const particleCount = detailLevel >= 3 ? 40 : detailLevel >= 2 ? 20 : 10;
+        for (let p = 0; p < particleCount; p++) {
+          const px = cx + (Math.random() - 0.5) * sW * 0.8;
+          const py = baseY + sH * 0.15 + Math.random() * sH * 0.6;
+          // Random pixel displacement
+          const displacedX = px + (Math.random() - 0.5) * sW * 0.05;
+          const displacedY = py + (Math.random() - 0.5) * sH * 0.02;
+          const isWhite = Math.random() > 0.6;
+          ctx.fillStyle = isWhite
+            ? this.colorWithAlpha('#ffffff', alpha * 0.15)
+            : this.colorWithAlpha('#263238', alpha * 0.2);
+          ctx.shadowBlur = 2;
+          ctx.fillRect(displacedX, displacedY, Math.random() * 3, 1);
+        }
+
+        ctx.globalAlpha = bodyAlpha;
+
+        // Faceless humanoid shape
+        const floatOffset = Math.sin(anim * 0.8) * sH * 0.03;
+        const headCX = cx + Math.sin(anim * 0.5) * sW * 0.02;
+        const headCY = baseY + sH * 0.15 + floatOffset;
+
+        // Head - just an oval, no face
+        ctx.strokeStyle = entityColor;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 20;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(headCX, headCY, sW * 0.1, sW * 0.14, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Static noise inside head
+        if (detailLevel >= 2) {
+          for (let i = 0; i < 15; i++) {
+            const nx = headCX + (Math.random() - 0.5) * sW * 0.15;
+            const ny = headCY + (Math.random() - 0.5) * sW * 0.2;
+            ctx.fillStyle = this.colorWithAlpha('#ffffff', alpha * Math.random() * 0.3);
+            ctx.fillRect(nx, ny, Math.random() * 2, 1);
+          }
+        }
+
+        // Body - flickering humanoid outline
+        const bodyTop = headCY + sW * 0.12;
+        const bodyBot = baseY + sH * 0.6;
+        const bodyW = sW * 0.18;
+
+        // Glitching body outline
+        ctx.strokeStyle = entityColor;
+        ctx.lineWidth = 1.5;
+        const segments = 12;
+        ctx.beginPath();
+        for (let i = 0; i <= segments; i++) {
+          const t = i / segments;
+          const by = bodyTop + (bodyBot - bodyTop) * t;
+          const glitch = Math.random() > 0.85 ? (Math.random() - 0.5) * sW * 0.1 : 0;
+          const wave = Math.sin(anim * 2 + t * 5) * sW * 0.03;
+          const bx = cx - bodyW + wave + glitch;
+          if (i === 0) ctx.moveTo(bx, by);
+          else ctx.lineTo(bx, by);
+        }
+        for (let i = segments; i >= 0; i--) {
+          const t = i / segments;
+          const by = bodyTop + (bodyBot - bodyTop) * t;
+          const glitch = Math.random() > 0.85 ? (Math.random() - 0.5) * sW * 0.1 : 0;
+          const wave = Math.sin(anim * 2 + t * 5 + 1) * sW * 0.03;
+          const bx = cx + bodyW + wave + glitch;
+          ctx.lineTo(bx, by);
+        }
+        ctx.closePath();
+        ctx.stroke();
+
+        // Reaching arms - phased
+        for (let a = 0; a < 4; a++) {
+          const side = a % 2 === 0 ? -1 : 1;
+          const armPhase = anim * (1.2 + a * 0.3) + a * 1.7;
+          const phaseAlpha = (Math.sin(armPhase * 0.7) + 1) * 0.3 + (isChase ? 0.2 : 0);
+          if (phaseAlpha < 0.1) continue;
+
+          ctx.strokeStyle = this.colorWithAlpha('#37474f', alpha * phaseAlpha);
+          ctx.lineWidth = 1;
+          const shoulderX = cx + side * bodyW;
+          const shoulderY = bodyTop + (bodyBot - bodyTop) * (0.1 + a * 0.15);
+          const elbowX = shoulderX + side * sW * 0.1 + Math.sin(armPhase) * sW * 0.03;
+          const elbowY = shoulderY + sH * 0.15;
+          const handX = elbowX + Math.sin(armPhase * 1.5) * sW * 0.06;
+          const handY = elbowY + sH * 0.1;
+
+          ctx.beginPath();
+          ctx.moveTo(shoulderX, shoulderY);
+          ctx.lineTo(elbowX, elbowY);
+          ctx.lineTo(handX, handY);
+          ctx.stroke();
+        }
+
+        // Illusion duplicates (visual only)
+        if (entity.illusionTimer > 0 && entity.illusionTimer < 3) {
+          const illusionAlpha = alpha * 0.15;
+          for (let il = 0; il < 2; il++) {
+            const ilX = cx + (il === 0 ? -sW * 0.4 : sW * 0.4) + Math.sin(anim * 3 + il * 2) * sW * 0.1;
+            ctx.strokeStyle = this.colorWithAlpha('#37474f', illusionAlpha);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.ellipse(ilX, headCY, sW * 0.08, sW * 0.12, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(ilX, headCY + sW * 0.1);
+            ctx.lineTo(ilX, bodyBot);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // ========== BROODMOTHER: Massive bloated body, tendrils ==========
+      else if (entity.type === 'broodmother') {
+        const scale = 1.6;
+        const sH = spriteHeight * scale;
+        const sW = spriteWidth * scale;
+        const baseY = drawY - spriteHeight * 0.3;
+
+        // Dark pink aura - pulsating
+        const pulseScale = 1 + Math.sin(anim * 2) * 0.1;
+        ctx.fillStyle = this.colorWithAlpha('#880e4f', alpha * 0.1 * (1 + chaseFactor * 0.5));
+        ctx.shadowColor = '#ad1457';
+        ctx.shadowBlur = 60;
+        ctx.beginPath();
+        ctx.ellipse(cx, baseY + sH * 0.4, sW * 0.6 * pulseScale, sH * 0.3 * pulseScale, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Massive bloated body
+        ctx.strokeStyle = entityColor;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 25;
+        ctx.lineWidth = 2.5;
+
+        const bodyTop = baseY + sH * 0.15;
+        const bodyBot = baseY + sH * 0.65;
+        const bodyW = sW * 0.35;
+
+        // Bloated body outline with breathing
+        const breathScale = 1 + Math.sin(anim * 1.5) * 0.03;
+        ctx.beginPath();
+        ctx.moveTo(cx - bodyW * breathScale, bodyTop);
+        ctx.quadraticCurveTo(cx - bodyW * 1.2 * breathScale, (bodyTop + bodyBot) / 2, cx - bodyW * 0.8, bodyBot);
+        ctx.lineTo(cx + bodyW * 0.8, bodyBot);
+        ctx.quadraticCurveTo(cx + bodyW * 1.2 * breathScale, (bodyTop + bodyBot) / 2, cx + bodyW * breathScale, bodyTop);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Opening in center revealing parasites
+        ctx.fillStyle = this.colorWithAlpha('#1a0011', alpha * 0.6);
+        ctx.shadowColor = '#f50057';
+        ctx.shadowBlur = 10;
+        const openW = sW * 0.12;
+        const openH = sW * 0.08;
+        ctx.beginPath();
+        ctx.ellipse(cx, (bodyTop + bodyBot) / 2, openW, openH, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Small parasite shapes inside
+        if (detailLevel >= 2) {
+          ctx.fillStyle = this.colorWithAlpha('#f50057', alpha * 0.5);
+          ctx.shadowColor = '#f50057';
+          ctx.shadowBlur = 5;
+          for (let p = 0; p < 3; p++) {
+            const px = cx + Math.sin(anim * 2 + p * 2.1) * openW * 0.5;
+            const py = (bodyTop + bodyBot) / 2 + Math.cos(anim * 1.5 + p * 1.7) * openH * 0.5;
+            ctx.beginPath();
+            ctx.arc(px, py, sW * 0.01, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Head - smaller, sunk into body
+        const headCY = bodyTop - sH * 0.02;
+        ctx.strokeStyle = entityColor;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 20;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(cx, headCY, sW * 0.08, sW * 0.06, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Eyes
+        ctx.fillStyle = this.colorWithAlpha(eyeColor, alpha * (0.7 + Math.sin(anim * 2) * 0.3));
+        ctx.shadowColor = eyeColor;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(cx - sW * 0.03, headCY - sW * 0.01, sW * 0.015, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + sW * 0.03, headCY - sW * 0.01, sW * 0.015, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Multiple tendrils
+        ctx.strokeStyle = entityColor;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 15;
+        ctx.lineWidth = 1.5;
+        const tendrilCount = detailLevel >= 2 ? 6 : 4;
+        for (let t = 0; t < tendrilCount; t++) {
+          const side = t % 2 === 0 ? -1 : 1;
+          const tIdx = Math.floor(t / 2);
+          const baseTX = cx + side * bodyW * (0.5 + tIdx * 0.3);
+          const baseTY = bodyBot - sH * 0.05;
+          const tendrilLen = sH * 0.2 + Math.sin(anim + t * 1.5) * sH * 0.05;
+          const tMidX = baseTX + side * sW * 0.08 + Math.sin(anim * 1.5 + t * 2) * sW * 0.04;
+          const tMidY = baseTY + tendrilLen * 0.5;
+          const tTipX = tMidX + Math.sin(anim * 2 + t * 3) * sW * 0.06;
+          const tTipY = baseTY + tendrilLen;
+
+          ctx.beginPath();
+          ctx.moveTo(baseTX, baseTY);
+          ctx.quadraticCurveTo(tMidX, tMidY, tTipX, tTipY);
+          ctx.stroke();
+        }
+
+        // Bile puddle indicator
+        if (isChase) {
+          ctx.fillStyle = this.colorWithAlpha('#880e4f', alpha * 0.1);
+          ctx.shadowColor = '#ad1457';
+          ctx.shadowBlur = 15;
+          ctx.beginPath();
+          ctx.ellipse(cx, bodyBot + sH * 0.1, sW * 0.3, sH * 0.04, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Health bar for entities with less than maxHealth
+      if (entity.health < entity.maxHealth && entity.state !== 'dead') {
+        const hbW = spriteWidth * 1.2;
+        const hbH = 3;
+        const hbX = screenX - hbW / 2;
+        const hbY = drawY - 8;
+        const healthPct = entity.health / entity.maxHealth;
+
+        ctx.globalAlpha = alpha * 0.8;
+        // Background
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(hbX, hbY, hbW, hbH);
+        // Health bar
+        const healthColor = healthPct > 0.5 ? '#76ff03' : healthPct > 0.25 ? '#ffab00' : '#ff1744';
+        ctx.fillStyle = healthColor;
+        ctx.fillRect(hbX, hbY, hbW * healthPct, hbH);
+        // Border
+        ctx.strokeStyle = this.colorWithAlpha(healthColor, 0.4);
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(hbX, hbY, hbW, hbH);
+        ctx.globalAlpha = alpha;
+      }
+
       // Record afterimage for moving entities
       if (entity.state === 'chase' || entity.state === 'investigate') {
         this.entityAfterimages.push({
@@ -4054,6 +5970,7 @@ export class EchoGameEngine {
     let isKilling = false;
 
     for (const entity of this.entities) {
+      if (entity.state === 'dead') continue;
       const dx = entity.pos.x - p.pos.x;
       const dy = entity.pos.y - p.pos.y;
       const d = Math.sqrt(dx * dx + dy * dy);
@@ -4117,7 +6034,7 @@ export class EchoGameEngine {
     // 2. Vignette darkening when entity is close
     if (closestDist < 5 && closestType) {
       const vignetteIntensity = Math.max(0, 1 - closestDist / 5) * 0.5;
-      const typeColor = closestType === 'stalker' ? '#8b0000' : closestType === 'hunter' ? '#3e2000' : '#2a0040';
+      const typeColor = ENEMY_TEMPLATES[closestType]?.color || '#8b0000';
       const grad = ctx.createRadialGradient(w / 2, h / 2, w * 0.15, w / 2, h / 2, w * 0.55);
       grad.addColorStop(0, 'rgba(0,0,0,0)');
       grad.addColorStop(0.5, this.colorWithAlpha(typeColor, vignetteIntensity * 0.3));
@@ -4143,7 +6060,7 @@ export class EchoGameEngine {
         // Static noise burst
         if (distortIntensity > 0.3) {
           const noiseCount = Math.floor(distortIntensity * 30);
-          const noiseColor = closestType === 'stalker' ? '#ff1744' : closestType === 'hunter' ? '#ff6d00' : '#aa00ff';
+          const noiseColor = ENEMY_TEMPLATES[closestType]?.color || '#ff1744';
           ctx.fillStyle = this.colorWithAlpha(noiseColor, distortIntensity * 0.06);
           for (let n = 0; n < noiseCount; n++) {
             ctx.fillRect(Math.random() * w, Math.random() * h, Math.random() * 4, 1);
@@ -4991,6 +6908,11 @@ export class EchoGameEngine {
         case 'stalker': color = 'rgba(255,23,68,0.8)'; break;
         case 'hunter': color = 'rgba(255,109,0,0.8)'; break;
         case 'phantom': color = 'rgba(170,0,255,0.8)'; break;
+        case 'devourer': color = 'rgba(139,0,0,0.8)'; break;
+        case 'abomination': color = 'rgba(74,20,140,0.8)'; break;
+        case 'arachnid': color = 'rgba(27,94,32,0.8)'; break;
+        case 'whisperer': color = 'rgba(38,50,56,0.8)'; break;
+        case 'broodmother': color = 'rgba(136,14,79,0.8)'; break;
         default: color = 'rgba(255,0,0,0.6)';
       }
       const pulse = entity.state === 'chase' ? (Math.sin(performance.now() / 150) * 0.3 + 0.7) : 0.7;

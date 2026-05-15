@@ -66,7 +66,7 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
 // ---- Enemy Types ----
 export type SonarMode = 'passive' | 'active';
 
-export type EnemyType = 'stalker' | 'hunter' | 'phantom';
+export type EnemyType = 'stalker' | 'hunter' | 'phantom' | 'devourer' | 'abomination' | 'arachnid' | 'whisperer' | 'broodmother';
 
 export interface EnemyTemplate {
   type: EnemyType;
@@ -79,6 +79,8 @@ export interface EnemyTemplate {
   glowColor: string;
   eyeColor: string;
   behavior: string;
+  maxHealth: number;
+  damage: number;
 }
 
 export const ENEMY_TEMPLATES: Record<EnemyType, EnemyTemplate> = {
@@ -86,16 +88,50 @@ export const ENEMY_TEMPLATES: Record<EnemyType, EnemyTemplate> = {
     type: 'stalker', name: 'Acechador', description: 'Lento pero implacable. Oye todo y nunca olvida.',
     baseSpeed: 0.8, chaseSpeed: 2.5, hearingRange: 14, color: '#ff1744', glowColor: '#ff5252', eyeColor: '#ff0000',
     behavior: 'patrols slowly, investigates all sounds, chases persistently',
+    maxHealth: 80, damage: 25,
   },
   hunter: {
     type: 'hunter', name: 'Cazador', description: 'Rápido y agresivo. Se acerca corriendo al mínimo sonido.',
     baseSpeed: 1.4, chaseSpeed: 3.8, hearingRange: 10, color: '#ff6d00', glowColor: '#ffab40', eyeColor: '#ff8800',
     behavior: 'fast patrol, rushes to sounds, short attention span',
+    maxHealth: 60, damage: 30,
   },
   phantom: {
     type: 'phantom', name: 'Fantasma', description: 'Silencioso e impredecible. Aparece donde menos lo esperas.',
     baseSpeed: 0.6, chaseSpeed: 2.0, hearingRange: 20, color: '#aa00ff', glowColor: '#d500f9', eyeColor: '#e040fb',
     behavior: 'teleports near loud sounds, whisper detection, disappears',
+    maxHealth: 50, damage: 35,
+  },
+  // ===== NEW MONSTERS - From images + 3 originals =====
+  devourer: {
+    type: 'devourer', name: 'El Devorador', description: 'Bestia colosal con cuernos y cola de látigo. Su aliento huele a muerte.',
+    baseSpeed: 0.6, chaseSpeed: 3.2, hearingRange: 16, color: '#8b0000', glowColor: '#b71c1c', eyeColor: '#ffab00',
+    behavior: 'charges blindly toward sounds, devastating charge attack, very persistent',
+    maxHealth: 200, damage: 40,
+  },
+  abomination: {
+    type: 'abomination', name: 'La Abominación', description: 'Carne corrompida y huesos expuestos. Runas arcanas pulsan en su piel.',
+    baseSpeed: 0.9, chaseSpeed: 2.8, hearingRange: 18, color: '#4a148c', glowColor: '#7b1fa2', eyeColor: '#ffd600',
+    behavior: 'leaves corrosive trail, passive aura damages nearby player, very tanky',
+    maxHealth: 250, damage: 35,
+  },
+  arachnid: {
+    type: 'arachnid', name: 'La Arácnida', description: 'Cuerpo de araña con rostro humanoide. Trepa paredes y lanza telarañas.',
+    baseSpeed: 1.8, chaseSpeed: 4.5, hearingRange: 12, color: '#1b5e20', glowColor: '#2e7d32', eyeColor: '#76ff03',
+    behavior: 'fastest enemy, climbs walls, ensnares player with web, hit and run',
+    maxHealth: 70, damage: 20,
+  },
+  whisperer: {
+    type: 'whisperer', name: 'El Susurrador', description: 'Entidad de estática sin rostro. Te paraliza con susurros y se teletransporta.',
+    baseSpeed: 0.4, chaseSpeed: 2.2, hearingRange: 25, color: '#263238', glowColor: '#37474f', eyeColor: '#e0e0e0',
+    behavior: 'paralyzes player with whispers, teleports when hit, creates illusions',
+    maxHealth: 100, damage: 45,
+  },
+  broodmother: {
+    type: 'broodmother', name: 'La Madre', description: 'Masa informe que genera parásitos desde su interior. Nunca para de crecer.',
+    baseSpeed: 0.3, chaseSpeed: 1.8, hearingRange: 22, color: '#880e4f', glowColor: '#ad1457', eyeColor: '#f50057',
+    behavior: 'spawns parasites, area denial with bile, absorbs damage from killed parasites',
+    maxHealth: 300, damage: 50,
   },
 };
 
@@ -158,10 +194,19 @@ export interface Player {
   selectedSlot: number;
   interactCooldown: number;
   hardcore?: boolean;
+  // Combat
+  equippedWeapon: string | null; // weapon item id
+  attackCooldown: number;
+  isAttacking: boolean;
+  attackTimer: number;
+  webbed: boolean;     // ensnared by arachnid
+  webTimer: number;
+  paralyzed: boolean;  // paralyzed by whisperer
+  paralyzeTimer: number;
 }
 
 // ---- Entity ----
-export type EntityState = 'patrol' | 'investigate' | 'chase' | 'search' | 'idle' | 'teleport';
+export type EntityState = 'patrol' | 'investigate' | 'chase' | 'search' | 'idle' | 'teleport' | 'dead';
 
 export interface Entity {
   id: number;
@@ -178,6 +223,12 @@ export interface Entity {
   animPhase: number;
   killTimer: number;
   health: number;
+  maxHealth: number;
+  // Combat
+  stunTimer: number;        // stunned by shock weapons
+  hitFlashTimer: number;    // visual flash when damaged
+  deathTimer: number;       // death animation timer
+  damage: number;           // damage this entity deals
   // Phantom-specific
   teleportCooldown: number;
   isTeleporting: boolean;
@@ -186,6 +237,17 @@ export interface Entity {
   rushTimer: number;
   // Stalker-specific
   persistenceTimer: number;
+  // Devourer-specific
+  chargeTimer: number;
+  isCharging: boolean;
+  // Arachnid-specific
+  webCooldown: number;
+  // Whisperer-specific
+  whisperTimer: number;
+  illusionTimer: number;
+  // Broodmother-specific
+  spawnTimer: number;
+  parasiteIds: number[];
 }
 
 // ---- Chapters ----
@@ -213,7 +275,7 @@ export const CHAPTERS: Chapter[] = [
     id: 1, name: 'El Despertar', subtitle: 'Capítulo 1',
     description: 'Despiertas en la oscuridad de un edificio abandonado.',
     mapType: 'building', mapWidth: 36, mapHeight: 36, roomCount: 7,
-    enemies: [{ type: 'stalker', count: 2 }],
+    enemies: [{ type: 'stalker', count: 2 }, { type: 'devourer', count: 1 }],
     itemDensity: 1.0, hasDoors: true, hasOutdoor: false,
     introText: 'No recuerdas cómo llegaste aquí. Solo silencio... y algo que se mueve en la oscuridad.',
     outroText: 'Encontraste la salida del edificio, pero la pesadilla apenas comienza.',
@@ -227,7 +289,7 @@ export const CHAPTERS: Chapter[] = [
     id: 2, name: 'Las Cloacas', subtitle: 'Capítulo 2',
     description: 'El camino te lleva a las alcantarillas bajo la ciudad.',
     mapType: 'sewers', mapWidth: 42, mapHeight: 42, roomCount: 9,
-    enemies: [{ type: 'stalker', count: 2 }, { type: 'hunter', count: 1 }],
+    enemies: [{ type: 'stalker', count: 2 }, { type: 'hunter', count: 1 }, { type: 'arachnid', count: 1 }],
     itemDensity: 0.8, hasDoors: true, hasOutdoor: false,
     introText: 'El agua gotea constantemente. Cada gota es un sonido que te delata.',
     outroText: 'Las cloacas terminan en una salida a la superficie.',
@@ -241,7 +303,7 @@ export const CHAPTERS: Chapter[] = [
     id: 3, name: 'Calles Vacías', subtitle: 'Capítulo 3',
     description: 'Emerges a las calles desiertas de la ciudad.',
     mapType: 'street', mapWidth: 50, mapHeight: 50, roomCount: 10,
-    enemies: [{ type: 'stalker', count: 1 }, { type: 'hunter', count: 2 }],
+    enemies: [{ type: 'stalker', count: 1 }, { type: 'hunter', count: 2 }, { type: 'abomination', count: 1 }],
     itemDensity: 0.7, hasDoors: false, hasOutdoor: true,
     introText: 'La ciudad está vacía. Los edificios son sombras contra el cielo negro.',
     outroText: 'Encontraste refugio en un hospital abandonado.',
@@ -255,7 +317,7 @@ export const CHAPTERS: Chapter[] = [
     id: 4, name: 'El Hospital', subtitle: 'Capítulo 4',
     description: 'Un hospital abandonado lleno de ecos del pasado.',
     mapType: 'hospital', mapWidth: 44, mapHeight: 44, roomCount: 12,
-    enemies: [{ type: 'stalker', count: 2 }, { type: 'phantom', count: 1 }],
+    enemies: [{ type: 'stalker', count: 2 }, { type: 'phantom', count: 1 }, { type: 'whisperer', count: 1 }],
     itemDensity: 0.9, hasDoors: true, hasOutdoor: false,
     introText: 'Los pasillos del hospital son un laberinto de ecos y susurros.',
     outroText: 'En el sótano del hospital descubres un pasaje subterráneo.',
@@ -269,7 +331,7 @@ export const CHAPTERS: Chapter[] = [
     id: 5, name: 'Bajo Tierra', subtitle: 'Capítulo 5',
     description: 'Un laberinto subterráneo de túneles y cavernas.',
     mapType: 'underground', mapWidth: 48, mapHeight: 48, roomCount: 11,
-    enemies: [{ type: 'hunter', count: 2 }, { type: 'phantom', count: 2 }],
+    enemies: [{ type: 'hunter', count: 2 }, { type: 'phantom', count: 2 }, { type: 'devourer', count: 1 }, { type: 'arachnid', count: 1 }],
     itemDensity: 0.6, hasDoors: true, hasOutdoor: false,
     exitRequiredKey: 'ancient_key',
     introText: 'Los túneles son profundos y antiguos. Algo te observa desde las sombras.',
@@ -284,7 +346,7 @@ export const CHAPTERS: Chapter[] = [
     id: 6, name: 'La Torre del Silencio', subtitle: 'Capítulo 6',
     description: 'La fuente de la estática. El final del camino.',
     mapType: 'tower', mapWidth: 30, mapHeight: 40, roomCount: 8,
-    enemies: [{ type: 'stalker', count: 2 }, { type: 'hunter', count: 2 }, { type: 'phantom', count: 2 }],
+    enemies: [{ type: 'stalker', count: 2 }, { type: 'hunter', count: 2 }, { type: 'phantom', count: 2 }, { type: 'devourer', count: 1 }, { type: 'abomination', count: 1 }, { type: 'whisperer', count: 1 }, { type: 'broodmother', count: 1 }],
     itemDensity: 0.5, hasDoors: true, hasOutdoor: true,
     introText: 'La torre se alza ante ti. La estática resuena en cada piedra.',
     outroText: 'El silencio regresa. La estática se desvanece. Sobreviviste.',
@@ -436,6 +498,16 @@ export const NEON_COLORS = {
   hunterGlow: '#ffab40',
   phantom: '#aa00ff',
   phantomGlow: '#d500f9',
+  devourer: '#8b0000',
+  devourerGlow: '#b71c1c',
+  abomination: '#4a148c',
+  abominationGlow: '#7b1fa2',
+  arachnid: '#1b5e20',
+  arachnidGlow: '#2e7d32',
+  whisperer: '#263238',
+  whispererGlow: '#37474f',
+  broodmother: '#880e4f',
+  broodmotherGlow: '#ad1457',
   pulse: '#00e5ff',
   flashlight: '#ffe082',
   item: '#ffd600',

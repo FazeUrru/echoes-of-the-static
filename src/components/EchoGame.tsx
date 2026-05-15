@@ -114,7 +114,7 @@ export default function EchoGame() {
   const [joystickPos, setJoystickPos] = useState({ dx: 0, dy: 0, active: false });
 
   // ---- Engine live state (polling for zone warnings etc) ----
-  const [engineLiveState, setEngineLiveState] = useState({ isInSilentZone: false, isInWhiteNoiseZone: false, micEnabled: false, hardcoreMode: false, sonarMode: 'active' as 'active' | 'passive', coopRole: 'none' as import('@/game/types').CoopRole, pingCount: 0, currentChapter: 1, totalPoints: 0, unlockedCharCount: 0, engineDifficulty: 'medium' as Difficulty, engineHardcore: false, playTimeSecs: 0 });
+  const [engineLiveState, setEngineLiveState] = useState({ isInSilentZone: false, isInWhiteNoiseZone: false, micEnabled: false, hardcoreMode: false, sonarMode: 'active' as 'active' | 'passive', coopRole: 'none' as import('@/game/types').CoopRole, pingCount: 0, currentChapter: 1, totalPoints: 0, unlockedCharCount: 0, engineDifficulty: 'medium' as Difficulty, engineHardcore: false, playTimeSecs: 0, equippedWeapon: null as string | null, weaponAmmo: 0, playerHealth: 100, playerMaxHealth: 100, attackCooldown: 0, isWebbed: false, isParalyzed: false });
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -134,6 +134,13 @@ export default function EchoGame() {
           engineDifficulty: eng.difficulty,
           engineHardcore: eng.hardcoreMode,
           playTimeSecs: playTimeRef.current,
+          equippedWeapon: eng.player.equippedWeapon,
+          weaponAmmo: eng.player.inventory.find((s: any) => s.item.id === eng.player.equippedWeapon)?.uses || 0,
+          playerHealth: eng.player.health,
+          playerMaxHealth: eng.player.maxHealth,
+          attackCooldown: eng.player.attackCooldown,
+          isWebbed: eng.player.webbed,
+          isParalyzed: eng.player.paralyzed,
         });
       }
     }, 200);
@@ -386,9 +393,15 @@ export default function EchoGame() {
       {/* ===== ACTION BUTTONS (Right Side) ===== */}
       {isMobile && gameState === 'playing' && (
         <div className="absolute right-2 bottom-3 z-20 flex flex-col items-end gap-1.5">
+          {/* ATTACK button - large, prominent */}
+          <button className="touch-btn game-touch-btn"
+            style={{ width: 64, height: 64, fontSize: 12, borderRadius: '50%', borderWidth: 2, borderColor: 'rgba(255,23,68,0.5)', boxShadow: '0 0 12px rgba(255,23,68,0.2)', background: engineLiveState.attackCooldown > 0 ? 'rgba(100,0,0,0.3)' : 'rgba(255,23,68,0.1)' }}
+            onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.attackWithWeapon(); }}>
+            ⚔️
+          </button>
           {/* ECO - Large pulse button */}
           <button className="touch-btn game-touch-btn"
-            style={{ width: 60, height: 60, fontSize: 13, borderRadius: '50%', borderWidth: 2, borderColor: 'rgba(0,229,255,0.4)', boxShadow: '0 0 8px rgba(0,229,255,0.15)' }}
+            style={{ width: 54, height: 54, fontSize: 12, borderRadius: '50%', borderWidth: 2, borderColor: 'rgba(0,229,255,0.4)', boxShadow: '0 0 8px rgba(0,229,255,0.15)' }}
             onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); engineRef.current?.emitPulse(); }}>
             ECO
           </button>
@@ -493,6 +506,73 @@ export default function EchoGame() {
             <div className="absolute top-8 sm:top-14 left-1/2 -translate-x-1/2 z-20 font-mono text-xs sm:text-sm tracking-widest animate-pulse"
               style={{ color: '#ffffff', textShadow: '0 0 10px rgba(255,255,255,0.5)' }}>
               📡 RUIDO BLANCO
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ===== WEAPON HUD & STATUS EFFECTS ===== */}
+      {gameState === 'playing' && (
+        <>
+          {/* Weapon indicator - bottom center */}
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 pointer-events-none">
+            {engineLiveState.equippedWeapon && (
+              <div className="font-mono text-[10px] sm:text-xs px-3 py-1 rounded-sm"
+                style={{ color: '#ff1744', background: 'rgba(255,23,68,0.1)', border: '1px solid rgba(255,23,68,0.3)', textShadow: '0 0 8px rgba(255,23,68,0.3)' }}>
+                ⚔️ {engineLiveState.equippedWeapon.replace(/_/g, ' ').toUpperCase()} | 💥 {engineLiveState.weaponAmmo}
+              </div>
+            )}
+            {!engineLiveState.equippedWeapon && (
+              <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1 rounded-sm opacity-40"
+                style={{ color: '#666', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                Sin arma — Recoge un arma para luchar
+              </div>
+            )}
+          </div>
+
+          {/* Health bar - bottom left */}
+          <div className="absolute bottom-2 left-2 z-20 pointer-events-none" style={{ width: isMobile ? 80 : 120 }}>
+            <div className="font-mono text-[8px] sm:text-[10px] mb-0.5" style={{ color: engineLiveState.playerHealth > 50 ? '#76ff03' : engineLiveState.playerHealth > 25 ? '#ffd600' : '#ff1744' }}>
+              ❤️ {engineLiveState.playerHealth}/{engineLiveState.playerMaxHealth}
+            </div>
+            <div className="h-1.5 sm:h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+              <div className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${(engineLiveState.playerHealth / engineLiveState.playerMaxHealth) * 100}%`,
+                  background: engineLiveState.playerHealth > 50 ? '#76ff03' : engineLiveState.playerHealth > 25 ? '#ffd600' : '#ff1744',
+                  boxShadow: `0 0 6px ${engineLiveState.playerHealth > 50 ? 'rgba(118,255,3,0.5)' : engineLiveState.playerHealth > 25 ? 'rgba(255,214,0,0.5)' : 'rgba(255,23,68,0.5)'}`,
+                }} />
+            </div>
+          </div>
+
+          {/* Status effects */}
+          {engineLiveState.isWebbed && (
+            <div className="absolute top-14 sm:top-20 left-1/2 -translate-x-1/2 z-20 font-mono text-xs sm:text-sm tracking-widest animate-pulse"
+              style={{ color: '#76ff03', textShadow: '0 0 10px rgba(118,255,3,0.5)' }}>
+              🕸️ ATRAPADO
+            </div>
+          )}
+          {engineLiveState.isParalyzed && (
+            <div className="absolute top-14 sm:top-20 left-1/2 -translate-x-1/2 z-20 font-mono text-xs sm:text-sm tracking-widest animate-pulse"
+              style={{ color: '#e0e0e0', textShadow: '0 0 10px rgba(224,224,224,0.5)' }}>
+              👁️ PARALIZADO
+            </div>
+          )}
+
+          {/* Crosshair for desktop */}
+          {!isMobile && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
+              <div style={{ width: profile.crosshairSize * 2 + 4, height: profile.crosshairSize * 2 + 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {profile.crosshairStyle === 'cross' && (
+                  <div style={{ position: 'relative', width: profile.crosshairSize * 2, height: profile.crosshairSize * 2 }}>
+                    <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: profile.crosshairColor, transform: 'translateY(-50%)' }} />
+                    <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: profile.crosshairColor, transform: 'translateX(-50%)' }} />
+                  </div>
+                )}
+                {profile.crosshairStyle === 'dot' && (
+                  <div style={{ width: 3, height: 3, borderRadius: '50%', background: profile.crosshairColor }} />
+                )}
+              </div>
             </div>
           )}
         </>
@@ -662,11 +742,11 @@ export default function EchoGame() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
                 {[
                   { icon: '🔊', title: 'Ecolocalización', desc: 'Usa pulsos de sonido para revelar el mundo. Cada eco ilumina las paredes... y alerta a tus enemigos.', color: '#00e5ff' },
-                  { icon: '👹', title: '3 Tipos de Entidades', desc: 'Acechadores lentos y persistentes. Cazadores rápidos y agresivos. Fantasmas que se teletransportan.', color: '#ff1744' },
-                  { icon: '🏆', title: '6 Capítulos + Retos', desc: 'Campaña completa con speedruns. Desbloquea personajes exclusivos completando capítulos rápido.', color: '#ffd600' },
+                  { icon: '👹', title: '8 Monstruos Mortales', desc: 'Devorador, Abominación, Arácnida, Susurrador, Madre... y los originales. Cada uno con IA letal única.', color: '#ff1744' },
+                  { icon: '⚔️', title: '10 Armas de Combate', desc: 'Pistola de Eco, Rifle Sónico, Escopeta de Pulso, Cañón de Éter... Destruye lo que te acecha.', color: '#ff6d00' },
                   { icon: '🔇', title: 'Zonas Silenciosas', desc: 'Áreas donde el sonido no existe. Tu ecolocalización no funciona. Sobrevive en el silencio absoluto.', color: '#9c27b0' },
                   { icon: '👥', title: 'Co-op Asimétrico', desc: 'El Oído ve el mapa. El Cuerpo se mueve. Coordínate con tu compañero para sobrevivir.', color: '#76ff03' },
-                  { icon: '☠️', title: 'Modo Hardcore', desc: 'Una sola vida. Sin HUD. Sin linterna. Solo audio binaural. ¿Te atreves?', color: '#ff6d00' },
+                  { icon: '☠️', title: 'Modo Hardcore', desc: 'Una sola vida. Sin HUD. Sin linterna. Solo audio binaural. ¿Te atreves?', color: '#ffd600' },
                 ].map((feat, i) => (
                   <div key={i} className="p-2.5 sm:p-4 border rounded-sm" style={{ borderColor: `${feat.color}20`, background: `${feat.color}05` }}>
                     <div className="text-lg sm:text-2xl mb-1 sm:mb-2">{feat.icon}</div>
@@ -685,10 +765,10 @@ export default function EchoGame() {
               <h3 className="font-mono text-base sm:text-lg tracking-widest mb-3 sm:mb-4" style={{ color: '#00e5ff' }}>CONTROLES</h3>
               <div className="font-mono text-[9px] sm:text-[10px] space-y-1" style={{ color: '#555' }}>
                 <p>WASD: Mover | Ratón: Mirar | C/SHIFT: Agacharse</p>
-                <p>SPACE: Eco Activo | Clic: Eco Pasivo (Silencioso)</p>
-                <p>F: Pulso Activo (Revela mapa, ruido MÁXIMO)</p>
+                <p>SPACE: Eco Activo | Clic: Eco Pasivo / Atacar</p>
+                <p>F: Atacar con arma equipada | R: Cambiar Sonar</p>
                 <p>E: Interactuar | 1-4: Inventario | Q: Usar | G: Soltar</p>
-                <p>R: Cambiar Sonar | T: Ping Co-op | ESC: Pausa</p>
+                <p>⚔️ 10 armas | 👹 8 monstruos | 💀 ¡Que te persiguen!</p>
               </div>
               <div className="mt-3 font-mono text-[9px] sm:text-[10px] opacity-20" style={{ color: '#0097a7' }}>🎧 Auriculares recomendados</div>
               <div className="mt-2 font-mono text-[8px] sm:text-[9px] opacity-15" style={{ color: '#ffd700' }}>🏆 Complétalo rápido para desbloquear personajes exclusivos</div>
