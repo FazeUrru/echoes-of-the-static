@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from '
 import { EchoGameEngine } from '@/game/engine';
 import { GameState, Difficulty, DIFFICULTY_CONFIGS, CHAPTERS, ProfileSettings, AdvancedSettings, DEFAULT_PROFILE, DEFAULT_ADVANCED, ControlBinding, DEFAULT_CONTROLS, SPEEDRUN_CHALLENGES, CoopRole, CustomLevel } from '@/game/types';
 import { saveGame, loadGame, hasSave, buildSaveData, deleteSave, SaveData } from '@/game/saveSystem';
+import { getBackupSlots, loadFromSlot, hasCrashRecovery, loadCrashRecovery, exportBackupAsFile, importBackupFromFile, clearCrashRecovery, FullBackupData } from '@/game/backupSystem';
 import LevelEditor from './LevelEditor';
 import ParticleBackground from './ParticleBackground';
 import EchoMiniDemo from './EchoMiniDemo';
@@ -83,6 +84,10 @@ export default function EchoGame() {
   const [autoSaveAgoStr, setAutoSaveAgoStr] = useState('');
   const playTimeRef = useRef(0);
 
+  // ---- Backup system state ----
+  const [crashRecoveryAvailable, setCrashRecoveryAvailable] = useState(false);
+  const [showBackupManager, setShowBackupManager] = useState(false);
+
   // ---- Initialize save data (safe because ssr: false ensures client-only) ----
   const initialSave = (() => {
     try {
@@ -114,7 +119,7 @@ export default function EchoGame() {
   const [joystickPos, setJoystickPos] = useState({ dx: 0, dy: 0, active: false });
 
   // ---- Engine live state (polling for zone warnings etc) ----
-  const [engineLiveState, setEngineLiveState] = useState({ isInSilentZone: false, isInWhiteNoiseZone: false, micEnabled: false, hardcoreMode: false, sonarMode: 'active' as 'active' | 'passive', coopRole: 'none' as import('@/game/types').CoopRole, pingCount: 0, currentChapter: 1, totalPoints: 0, unlockedCharCount: 0, engineDifficulty: 'medium' as Difficulty, engineHardcore: false, playTimeSecs: 0, equippedWeapon: null as string | null, weaponAmmo: 0, playerHealth: 100, playerMaxHealth: 100, attackCooldown: 0, isWebbed: false, isParalyzed: false });
+  const [engineLiveState, setEngineLiveState] = useState({ isInSilentZone: false, isInWhiteNoiseZone: false, micEnabled: false, hardcoreMode: false, sonarMode: 'active' as 'active' | 'passive', coopRole: 'none' as import('@/game/types').CoopRole, pingCount: 0, currentChapter: 1, totalPoints: 0, unlockedCharCount: 0, engineDifficulty: 'medium' as Difficulty, engineHardcore: false, playTimeSecs: 0, equippedWeapon: null as string | null, weaponAmmo: 0, playerHealth: 100, playerMaxHealth: 100, attackCooldown: 0, isWebbed: false, isParalyzed: false, killCount: 0, totalDamageDealt: 0, totalDamageTaken: 0, enemiesRemaining: 0, nearbyHazard: null as 'toxic' | 'electric' | 'collapsing' | null });
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -141,10 +146,20 @@ export default function EchoGame() {
           attackCooldown: eng.player.attackCooldown,
           isWebbed: eng.player.webbed,
           isParalyzed: eng.player.paralyzed,
+          killCount: eng.killCount,
+          totalDamageDealt: eng.totalDamageDealt,
+          totalDamageTaken: eng.totalDamageTaken,
+          enemiesRemaining: eng.entities.filter((e: any) => e.state !== 'dead').length,
+          nearbyHazard: eng.hazards.some((h: any) => eng.dist(eng.player.pos, h.pos) < h.radius) ? eng.hazards.find((h: any) => eng.dist(eng.player.pos, h.pos) < h.radius)?.type : null,
         });
       }
     }, 200);
     return () => clearInterval(interval);
+  }, []);
+
+  // ---- Check for crash recovery on mount ----
+  useEffect(() => {
+    setCrashRecoveryAvailable(hasCrashRecovery());
   }, []);
 
   // ---- Update autosave time display periodically ----
@@ -485,6 +500,123 @@ export default function EchoGame() {
         </div>
       )}
 
+      {/* ===== BACKUP MANAGER ===== */}
+      {showBackupManager && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/85 z-30 px-4">
+          <div className="p-4 sm:p-6 border max-w-md w-full" style={{ borderColor: 'rgba(118,255,3,0.3)', backgroundColor: 'rgba(0,0,0,0.95)', maxHeight: '80dvh', overflowY: 'auto' }}>
+            <h3 className="font-mono text-sm mb-4" style={{ color: '#76ff03', textShadow: '0 0 10px rgba(118,255,3,0.3)' }}>💾 COPIAS DE SEGURIDAD</h3>
+            <p className="font-mono text-[10px] mb-4" style={{ color: '#888' }}>
+              Guarda y restaura tu partida completa. Incluye posición, inventario, salud, mapa explorado y enemigos.
+              Auto-backup cada 30s durante el juego.
+            </p>
+
+            {/* Backup Slots */}
+            <div className="space-y-2 mb-4">
+              {getBackupSlots().map(slot => (
+                <div key={slot.slot} className="flex items-center gap-2 p-2 border" style={{ borderColor: slot.exists ? 'rgba(118,255,3,0.3)' : 'rgba(255,255,255,0.1)', background: slot.exists ? 'rgba(118,255,3,0.03)' : 'rgba(0,0,0,0.3)' }}>
+                  <div className="flex-1">
+                    <div className="font-mono text-[10px]" style={{ color: slot.exists ? '#76ff03' : '#444' }}>
+                      Slot {slot.slot} {slot.exists ? `— ${slot.agoStr}` : '— Vacío'}
+                    </div>
+                    {slot.data && (
+                      <div className="font-mono text-[8px]" style={{ color: '#666' }}>
+                        Cap. {slot.data.currentChapter} | ❤️ {slot.data.playerHealth} | 💀 {slot.data.killCount} kills
+                      </div>
+                    )}
+                  </div>
+                  {slot.exists && (
+                    <button onClick={async () => {
+                      const data = loadFromSlot(slot.slot);
+                      if (data) {
+                        const eng = engineRef.current;
+                        if (eng) {
+                          await eng.startGame(data.currentChapter, data.difficulty as Difficulty, data.hardcoreMode, data.coopRole as CoopRole);
+                          eng.restoreFullBackup(data);
+                          setGameState('playing');
+                          setShowBackupManager(false);
+                        }
+                      }
+                    }}
+                      className="px-2 py-1 font-mono text-[9px] border active:scale-95"
+                      style={{ color: '#00e5ff', borderColor: 'rgba(0,229,255,0.3)', minHeight: 32 }}>
+                      CARGAR
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Export/Import */}
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => {
+                const eng = engineRef.current;
+                if (eng) {
+                  const backup = eng.createFullBackup();
+                  if (backup) exportBackupAsFile(backup);
+                }
+              }}
+                className="flex-1 py-2 font-mono text-[10px] border"
+                style={{ color: '#ffd600', borderColor: 'rgba(255,214,0,0.3)', background: 'rgba(255,214,0,0.05)', minHeight: 36 }}>
+                📤 EXPORTAR
+              </button>
+              <button onClick={async () => {
+                const data = await importBackupFromFile();
+                if (data) {
+                  const eng = engineRef.current;
+                  if (eng) {
+                    await eng.startGame(data.currentChapter, data.difficulty as Difficulty, data.hardcoreMode, data.coopRole as CoopRole);
+                    eng.restoreFullBackup(data);
+                    setGameState('playing');
+                    setShowBackupManager(false);
+                  }
+                }
+              }}
+                className="flex-1 py-2 font-mono text-[10px] border"
+                style={{ color: '#ffd600', borderColor: 'rgba(255,214,0,0.3)', background: 'rgba(255,214,0,0.05)', minHeight: 36 }}>
+                📥 IMPORTAR
+              </button>
+            </div>
+
+            {/* Crash Recovery */}
+            {crashRecoveryAvailable && (
+              <div className="p-2 border mb-3" style={{ borderColor: 'rgba(255,23,68,0.3)', background: 'rgba(255,23,68,0.05)' }}>
+                <div className="font-mono text-[10px] mb-1" style={{ color: '#ff1744' }}>⚠️ Partida recuperable encontrada</div>
+                <div className="flex gap-2">
+                  <button onClick={async () => {
+                    const data = loadCrashRecovery();
+                    if (data) {
+                      const eng = engineRef.current;
+                      if (eng) {
+                        await eng.startGame(data.currentChapter, data.difficulty as Difficulty, data.hardcoreMode, data.coopRole as CoopRole);
+                        eng.restoreFullBackup(data);
+                        setGameState('playing');
+                        setShowBackupManager(false);
+                        setCrashRecoveryAvailable(false);
+                      }
+                    }
+                  }}
+                    className="flex-1 py-1 font-mono text-[9px] border"
+                    style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.3)', minHeight: 28 }}>
+                    RECUPERAR
+                  </button>
+                  <button onClick={() => { clearCrashRecovery(); setCrashRecoveryAvailable(false); }}
+                    className="px-3 py-1 font-mono text-[9px] border"
+                    style={{ color: '#666', borderColor: '#333', minHeight: 28 }}>
+                    DESCARTAR
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <button onClick={() => setShowBackupManager(false)}
+              className="w-full py-2 font-mono text-xs border"
+              style={{ color: '#666', borderColor: '#333', background: 'rgba(0,0,0,0.3)', minHeight: 36 }}>
+              CERRAR
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ===== ZONE WARNING INDICATORS ===== */}
       {gameState === 'playing' && !engineLiveState.hardcoreMode && (
         <>
@@ -576,6 +708,25 @@ export default function EchoGame() {
             </div>
           )}
         </>
+      )}
+
+      {/* Combat Stats - top left */}
+      {gameState === 'playing' && !engineLiveState.hardcoreMode && (
+        <div className="absolute top-1 left-1 z-20 font-mono text-[8px] sm:text-[10px] space-y-0.5 pointer-events-none"
+          style={{ color: 'rgba(255,255,255,0.4)' }}>
+          <div style={{ color: '#ff1744' }}>💀 {engineLiveState.killCount} kills</div>
+          <div>⚔️ {engineLiveState.totalDamageDealt} dmg dealt</div>
+          <div style={{ color: engineLiveState.totalDamageTaken > 50 ? '#ff1744' : '#888' }}>🩸 {engineLiveState.totalDamageTaken} dmg taken</div>
+          <div style={{ color: '#ffd600' }}>👹 {engineLiveState.enemiesRemaining} remaining</div>
+        </div>
+      )}
+
+      {/* Hazard Warning */}
+      {engineLiveState.nearbyHazard && (
+        <div className="absolute top-20 sm:top-28 left-1/2 -translate-x-1/2 z-20 font-mono text-xs sm:text-sm tracking-widest animate-pulse"
+          style={{ color: engineLiveState.nearbyHazard === 'toxic' ? '#76ff03' : engineLiveState.nearbyHazard === 'electric' ? '#ffab00' : '#ff1744', textShadow: '0 0 10px currentColor' }}>
+          {engineLiveState.nearbyHazard === 'toxic' ? '☠️ ZONA TÓXICA' : engineLiveState.nearbyHazard === 'electric' ? '⚡ PELIGRO ELÉCTRICO' : '📉 SUELO INESTABLE'}
+        </div>
       )}
 
       {/* ===== CO-OP HUD ===== */}
@@ -679,6 +830,30 @@ export default function EchoGame() {
               <SoundWaveButton onClick={() => { setIsStarted(true); setGameState('difficulty'); }}>
                 NUEVA PARTIDA
               </SoundWaveButton>
+              {/* Crash Recovery */}
+              {crashRecoveryAvailable && (
+                <SoundWaveButton onClick={async () => {
+                  const data = loadCrashRecovery();
+                  if (data) {
+                    const eng = engineRef.current;
+                    if (eng) {
+                      await eng.startGame(data.currentChapter, data.difficulty as Difficulty, data.hardcoreMode, data.coopRole as CoopRole);
+                      eng.restoreFullBackup(data);
+                      setGameState('playing');
+                      setCrashRecoveryAvailable(false);
+                    }
+                  }
+                }} color="#ff1744">
+                  <span className="flex items-center justify-center gap-2">
+                    <span>⚠️ RECUPERAR PARTIDA</span>
+                    <span className="animate-pulse text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ff1744', backgroundColor: 'rgba(255,23,68,0.1)', border: '1px solid rgba(255,23,68,0.3)' }}>CRASH</span>
+                  </span>
+                  <span className="block text-[9px] mt-1 opacity-60 font-mono">Se encontró una partida sin guardar</span>
+                </SoundWaveButton>
+              )}
+              <SoundWaveButton onClick={() => setShowBackupManager(true)} color="#76ff03" dim>
+                💾 COPIAS DE SEGURIDAD
+              </SoundWaveButton>
               <SoundWaveButton onClick={() => setShowMiniDemo(true)} color="#ff6d00">
                 PROBAR ECOLOCALIZACIÓN
               </SoundWaveButton>
@@ -689,6 +864,14 @@ export default function EchoGame() {
                 }
               }} color="#9c27b0">
                 VER TRÁILER
+              </SoundWaveButton>
+              <SoundWaveButton onClick={() => {
+                const eng = engineRef.current;
+                if (eng) {
+                  eng.playCinematic(EchoGameEngine.STORY_CINEMATIC, () => {});
+                }
+              }} color="#8b0000">
+                📖 HISTORIA COMPLETA
               </SoundWaveButton>
               <SoundWaveButton onClick={() => setShowSettings(true)} dim>
                 AJUSTES
@@ -1003,8 +1186,8 @@ export default function EchoGame() {
 
       {/* ===== PAUSED ===== */}
       {gameState === 'paused' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10 px-4">
-          <h2 className="text-2xl sm:text-3xl font-mono mb-6 sm:mb-8 tracking-widest" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>PAUSADO</h2>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10 px-4 overflow-y-auto py-8">
+          <h2 className="text-2xl sm:text-3xl font-mono mb-4 sm:mb-6 tracking-widest" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>PAUSADO</h2>
           <div className="flex flex-col gap-2 sm:gap-3 w-full max-w-xs">
             <div className="animate-menu-appear" style={{ animationDelay: '0ms' }}>
               <NeonButton onClick={() => { const eng = engineRef.current; if (eng) eng.state = 'playing'; setGameState('playing'); }}>CONTINUAR</NeonButton>
@@ -1013,6 +1196,7 @@ export default function EchoGame() {
               <NeonButton onClick={() => {
                 const eng = engineRef.current;
                 if (eng) {
+                  eng.saveBackupToSlot(1);
                   const saveData = buildSaveData({
                     playerName: profile.playerName,
                     unlockedChapters,
@@ -1036,7 +1220,25 @@ export default function EchoGame() {
                   setShowSaveToast(true);
                   setTimeout(() => setShowSaveToast(false), 2000);
                 }
-              }} isNew>GUARDAR PARTIDA</NeonButton>
+              }} isNew>💾 GUARDAR PARTIDA</NeonButton>
+            </div>
+            {/* Backup Slots */}
+            <div className="animate-menu-appear" style={{ animationDelay: '75ms' }}>
+              <div className="flex gap-1.5">
+                {[1, 2, 3].map(slot => (
+                  <button key={slot} onClick={() => {
+                    const eng = engineRef.current;
+                    if (eng) {
+                      const ok = eng.saveBackupToSlot(slot);
+                      if (ok) { setShowSaveToast(true); setTimeout(() => setShowSaveToast(false), 2000); }
+                    }
+                  }}
+                    className="flex-1 py-2 font-mono text-[9px] sm:text-[10px] border tracking-wider active:scale-95 transition-transform"
+                    style={{ color: '#76ff03', borderColor: 'rgba(118,255,3,0.3)', background: 'rgba(118,255,3,0.05)', minHeight: 36 }}>
+                    SLOT {slot}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="animate-menu-appear" style={{ animationDelay: '100ms' }}>
               <NeonButton onClick={() => setShowSettings(true)} dim>AJUSTES</NeonButton>
@@ -1048,6 +1250,7 @@ export default function EchoGame() {
               <NeonButton onClick={() => {
                 const eng = engineRef.current;
                 if (eng) {
+                  eng.saveBackupToSlot(1);
                   const saveData = buildSaveData({
                     playerName: profile.playerName,
                     unlockedChapters,
@@ -1080,9 +1283,9 @@ export default function EchoGame() {
           </div>
           {/* Autosave indicator */}
           {lastAutoSaveTime && autoSaveAgoStr && (
-            <div className="mt-6 font-mono text-[10px] tracking-widest animate-pulse-glow"
+            <div className="mt-4 font-mono text-[10px] tracking-widest animate-pulse-glow"
               style={{ color: 'rgba(0,229,255,0.4)' }}>
-              Autoguardado: Hace {autoSaveAgoStr}
+              💾 Autoguardado: Hace {autoSaveAgoStr} | Backup automático cada 30s
             </div>
           )}
           {isMobile && (
@@ -1227,6 +1430,48 @@ export default function EchoGame() {
             style={{ color: '#76ff03', borderColor: 'rgba(118,255,3,0.4)', background: 'rgba(118,255,3,0.05)', minHeight: 48 }}>
             TOCAR PARA CONTINUAR
           </button>
+        </div>
+      )}
+
+      {/* ===== VICTORY / STATS SCREEN ===== */}
+      {gameState === 'won' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 z-20">
+          <div className="text-center max-w-md px-4">
+            {/* Rank display */}
+            <div className="mb-4" style={{ fontSize: 72, fontWeight: 'bold', fontFamily: 'monospace',
+              color: engineLiveState.totalDamageTaken < 20 ? '#ffd600' : engineLiveState.totalDamageTaken < 50 ? '#c0c0c0' : '#cd7f32',
+              textShadow: '0 0 30px currentColor, 0 0 60px currentColor' }}>
+              {engineLiveState.totalDamageTaken < 20 ? 'S' : engineLiveState.totalDamageTaken < 40 ? 'A' : engineLiveState.totalDamageTaken < 60 ? 'B' : engineLiveState.totalDamageTaken < 80 ? 'C' : 'D'}
+            </div>
+            <h2 className="font-mono text-xl sm:text-2xl tracking-widest mb-4" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.5)' }}>
+              CAPÍTULO COMPLETADO
+            </h2>
+            <div className="font-mono text-xs sm:text-sm space-y-2 mb-6" style={{ color: '#888' }}>
+              <div className="flex justify-between"><span>⏱️ Tiempo</span><span style={{ color: '#00e5ff' }}>{Math.floor((engineLiveState.playTimeSecs || 0) / 60)}:{String((engineLiveState.playTimeSecs || 0) % 60).padStart(2, '0')}</span></div>
+              <div className="flex justify-between"><span>💀 Monstruos eliminados</span><span style={{ color: '#ff1744' }}>{engineLiveState.killCount}</span></div>
+              <div className="flex justify-between"><span>⚔️ Daño infligido</span><span style={{ color: '#ff6d00' }}>{engineLiveState.totalDamageDealt}</span></div>
+              <div className="flex justify-between"><span>🩸 Daño recibido</span><span style={{ color: engineLiveState.totalDamageTaken > 50 ? '#ff1744' : '#76ff03' }}>{engineLiveState.totalDamageTaken}</span></div>
+              <div className="flex justify-between"><span>❤️ Salud restante</span><span style={{ color: '#76ff03' }}>{engineLiveState.playerHealth}</span></div>
+            </div>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => {
+                const eng = engineRef.current;
+                if (eng) {
+                  const nextChapter = Math.min(eng.currentChapter + 1, 6);
+                  handleStart(nextChapter, difficulty, hardcoreMode, coopRole);
+                }
+              }}
+                className="px-4 py-2 font-mono text-sm border"
+                style={{ color: '#00e5ff', borderColor: 'rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.05)', minHeight: 44 }}>
+                SIGUIENTE CAPÍTULO →
+              </button>
+              <button onClick={() => { setGameState('menu'); setIsStarted(false); }}
+                className="px-4 py-2 font-mono text-sm border"
+                style={{ color: '#666', borderColor: '#333', background: 'rgba(0,0,0,0.3)', minHeight: 44 }}>
+                MENÚ
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

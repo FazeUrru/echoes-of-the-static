@@ -52,6 +52,7 @@ import {
 } from './level';
 import { AudioSystem } from './audio';
 import { ITEM_BY_ID } from './items';
+import { buildFullBackup, FullBackupData, saveCrashRecovery, loadCrashRecovery, hasCrashRecovery, clearCrashRecovery, saveToSlot, loadFromSlot } from './backupSystem';
 
 // ---- Internal interfaces ----
 
@@ -79,7 +80,7 @@ interface FlareEffect {
 
 interface CinematicFrame {
   duration: number; // seconds
-  type: 'fade_in' | 'fade_out' | 'text' | 'scanlines' | 'pulse_wave' | 'static' | 'entity_reveal' | 'blackout' | 'logo' | 'warning';
+  type: 'fade_in' | 'fade_out' | 'text' | 'scanlines' | 'pulse_wave' | 'static' | 'entity_reveal' | 'blackout' | 'logo' | 'warning' | 'heartbeat' | 'glitch_text' | 'whisper';
   text?: string;
   subtext?: string;
   color?: string;
@@ -148,6 +149,15 @@ export class EchoGameEngine {
   // ---- Danger tracking ----
   closestEntityDist = Infinity;
 
+  // ---- Combat stats ----
+  killCount: number = 0;
+  totalDamageDealt: number = 0;
+  totalDamageTaken: number = 0;
+  enemiesRemaining: number = 0;
+
+  // ---- Environmental hazards ----
+  hazards: { pos: Vec2; type: 'toxic' | 'electric' | 'collapsing'; radius: number; timer: number; damagePerSec: number }[] = [];
+
   // ---- Entity afterimage trails ----
   private entityAfterimages: Array<{
     entityId: number;
@@ -168,10 +178,30 @@ export class EchoGameEngine {
   deathTimer = 0;
   introTimer = 0;
 
+  // ---- Dynamic lighting ----
+  flickerTimer: number = 5; // seconds between flickers
+  lightningFlash: number = 0; // countdown timer
+
   // ---- Screen shake ----
   shakeX = 0;
   shakeY = 0;
   shakeDecay = 0;
+
+  // ---- Post-processing ----
+  damageFlashAlpha: number = 0;
+  screenShakeX: number = 0;
+  screenShakeY: number = 0;
+  filmGrainIntensity: number = 0.04;
+
+  // ---- Sound wave ripples ----
+  soundRipples: { x: number; y: number; radius: number; maxRadius: number; alpha: number; color: string }[] = [];
+
+  // ---- Minimap fog of war ----
+  exploredCells: Set<string> = new Set();
+
+  // ---- Backup system ----
+  crashRecoveryTimer: number = 0; // seconds since last crash recovery save
+  crashRecoveryInterval: number = 30; // save crash recovery every 30 seconds
 
   // ---- Zone state ----
   isInSilentZone: boolean = false;
@@ -472,6 +502,11 @@ export class EchoGameEngine {
     this.closestEntityDist = Infinity;
     this.deathTimer = 0;
     this.glitchIntensity = 0;
+    this.exploredCells = new Set();
+    this.soundRipples = [];
+    this.damageFlashAlpha = 0;
+    this.screenShakeX = 0;
+    this.screenShakeY = 0;
     this.gameStartTime = performance.now();
 
     this.state = 'playing';
@@ -601,7 +636,39 @@ export class EchoGameEngine {
     this.closestEntityDist = Infinity;
     this.deathTimer = 0;
     this.glitchIntensity = 0;
+    this.exploredCells = new Set();
+    this.soundRipples = [];
+    this.damageFlashAlpha = 0;
+    this.screenShakeX = 0;
+    this.screenShakeY = 0;
     this.gameStartTime = performance.now();
+
+    // Reset combat stats
+    this.killCount = 0;
+    this.totalDamageDealt = 0;
+    this.totalDamageTaken = 0;
+    this.hazards = [];
+
+    // Spawn 2-4 hazards in random rooms
+    const hazardCount = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < hazardCount; i++) {
+      const hx = 3 + Math.random() * (this.map.width - 6);
+      const hy = 3 + Math.random() * (this.map.height - 6);
+      if (isWalkable(this.map, hx, hy)) {
+        const types: ('toxic' | 'electric' | 'collapsing')[] = ['toxic', 'electric', 'collapsing'];
+        const hType = types[Math.floor(Math.random() * types.length)];
+        this.hazards.push({
+          pos: { x: hx, y: hy },
+          type: hType,
+          radius: hType === 'toxic' ? 2.5 : hType === 'electric' ? 1.5 : 3,
+          timer: 9999, // permanent for the level
+          damagePerSec: hType === 'toxic' ? 5 : hType === 'electric' ? 15 : 3,
+        });
+      }
+    }
+
+    // Set enemies remaining
+    this.enemiesRemaining = this.entities.length;
   }
 
   // ============================================================
@@ -1046,6 +1113,8 @@ export class EchoGameEngine {
       radius,
       time: performance.now(),
     });
+    // Sound wave ripple visualization
+    this.soundRipples.push({ x: pos.x, y: pos.y, radius: 0, maxRadius: radius, alpha: 0.5, color: '#00e5ff' });
   }
 
   // ============================================================
@@ -1707,6 +1776,9 @@ export class EchoGameEngine {
     entity.health -= damage;
     entity.hitFlashTimer = 0.3;
 
+    // Track damage dealt
+    this.totalDamageDealt += damage;
+
     // Sound event at entity position
     this.addSoundEvent(entity.pos, 0.4, 5);
 
@@ -1714,6 +1786,10 @@ export class EchoGameEngine {
       entity.health = 0;
       entity.state = 'dead';
       entity.deathTimer = 1.0;
+
+      // Track kill
+      this.killCount++;
+      this.enemiesRemaining--;
 
       // Broodmother: kill all parasites
       if (entity.type === 'broodmother') {
@@ -1757,11 +1833,13 @@ export class EchoGameEngine {
   damagePlayer(amount: number) {
     const p = this.player;
     p.health -= amount;
+    this.totalDamageTaken += amount;
     // Screen shake / glitch effect
     this.glitchIntensity = Math.min(1, this.glitchIntensity + 0.3);
     this.shakeX = (Math.random() - 0.5) * 8;
     this.shakeY = (Math.random() - 0.5) * 8;
     this.shakeDecay = 300;
+    this.damageFlashAlpha = 0.4;
 
     if (p.health <= 0) {
       p.health = 0;
@@ -1869,6 +1947,7 @@ export class EchoGameEngine {
     this.updateZones(dt);
     this.updateAmbientLight();
     this.updateEntities(dt);
+    this.updateHazardIllumination();
     this.updatePulses();
     this.updateFlares();
     this.updateProximityIllumination();
@@ -1877,6 +1956,25 @@ export class EchoGameEngine {
     this.updateAnimations(dt);
     this.handleItemPickup();
     this.checkWinCondition();
+
+    // Dynamic lighting: flickering environment lights
+    this.flickerTimer -= dt;
+    if (this.flickerTimer <= 0) {
+      this.flickerTimer = 5 + Math.random() * 15; // 5-20 second intervals
+      // Create brief illumination at random nearby position
+      const rx = this.player.pos.x + (Math.random() - 0.5) * 10;
+      const ry = this.player.pos.y + (Math.random() - 0.5) * 10;
+      this.illuminateArea({x: rx, y: ry}, 4, 0.3, '#ffe082');
+    }
+
+    // Dynamic lighting: lightning flashes
+    if (Math.random() < 0.0002) {
+      this.lightningFlash = 0.3;
+    }
+    if (this.lightningFlash > 0) {
+      this.lightningFlash -= dt;
+      this.illuminateArea(this.player.pos, 25, 0.8, '#e0e0e0');
+    }
 
     // Co-op: Body role ping illumination
     if (this.coopEnabled && this.coopRole === 'body') {
@@ -1902,6 +2000,14 @@ export class EchoGameEngine {
       this.player.interactCooldown -= dt;
     }
 
+    // Crash recovery auto-backup
+    this.crashRecoveryTimer += dt;
+    if (this.crashRecoveryTimer >= this.crashRecoveryInterval) {
+      this.crashRecoveryTimer = 0;
+      const backup = this.createFullBackup();
+      if (backup) saveCrashRecovery(backup);
+    }
+
     // Screen shake decay
     if (this.shakeDecay > 0) {
       this.shakeDecay -= dt * 1000;
@@ -1915,6 +2021,52 @@ export class EchoGameEngine {
     // Clean old sound events
     const now = performance.now();
     this.soundEvents = this.soundEvents.filter(s => now - s.time < 5000);
+
+    // Damage flash decay
+    this.damageFlashAlpha = Math.max(0, this.damageFlashAlpha - dt * 1.5);
+    if (this.damageFlashAlpha > 0 || this.glitchIntensity > 0) {
+      this.screenShakeX = (Math.random() - 0.5) * this.damageFlashAlpha * 10 + (Math.random() - 0.5) * this.glitchIntensity * 5;
+      this.screenShakeY = (Math.random() - 0.5) * this.damageFlashAlpha * 10 + (Math.random() - 0.5) * this.glitchIntensity * 5;
+    } else {
+      this.screenShakeX *= 0.9;
+      this.screenShakeY *= 0.9;
+    }
+
+    // Sound ripple expansion
+    for (const ripple of this.soundRipples) {
+      ripple.radius += dt * 8;
+      ripple.alpha -= dt * 0.8;
+    }
+    this.soundRipples = this.soundRipples.filter(r => r.alpha > 0);
+
+    // Minimap fog of war: explore cells around player
+    const px = Math.floor(this.player.pos.x);
+    const py = Math.floor(this.player.pos.y);
+    for (let oy = -3; oy <= 3; oy++) {
+      for (let ox = -3; ox <= 3; ox++) {
+        const key = `${px + ox},${py + oy}`;
+        if (!this.exploredCells.has(key)) {
+          this.exploredCells.add(key);
+        }
+      }
+    }
+
+    // Also explore cells illuminated by active pulses
+    for (const pulse of this.pulses) {
+      const elapsed = (now - pulse.startTime) / 1000;
+      const currentRadius = Math.min(pulse.radius, elapsed * 30);
+      const pulseCellRadius = Math.floor(currentRadius);
+      const pcx = Math.floor(pulse.origin.x);
+      const pcy = Math.floor(pulse.origin.y);
+      for (let oy = -pulseCellRadius; oy <= pulseCellRadius; oy++) {
+        for (let ox = -pulseCellRadius; ox <= pulseCellRadius; ox++) {
+          if (ox * ox + oy * oy <= pulseCellRadius * pulseCellRadius) {
+            const key = `${pcx + ox},${pcy + oy}`;
+            this.exploredCells.add(key);
+          }
+        }
+      }
+    }
   }
 
   // ============================================================
@@ -2135,6 +2287,16 @@ export class EchoGameEngine {
     if (this.sonarMode === 'passive') {
       this.illuminateArea(this.player.pos, this.passiveSonarRevealRadius, 0.15, NEON_COLORS.wallSide);
     }
+
+    // Environmental hazards
+    for (const hazard of this.hazards) {
+      const dist = this.dist(this.player.pos, hazard.pos);
+      if (dist < hazard.radius) {
+        this.damagePlayer(hazard.damagePerSec * dt);
+      }
+      hazard.timer -= dt;
+    }
+    this.hazards = this.hazards.filter(h => h.timer > 0);
   }
 
   // ============================================================
@@ -2258,7 +2420,11 @@ export class EchoGameEngine {
 
       // Passive sonar: entities near the player create faint illumination (you can "hear" them breathing)
       if (this.sonarMode === 'passive' && playerDist < this.passiveEntityRevealRadius) {
-        const revealIntensity = 0.25 * (1 - playerDist / this.passiveEntityRevealRadius);
+        // Entity glow pulses more intensely when chasing
+        let revealIntensity = 0.25 * (1 - playerDist / this.passiveEntityRevealRadius);
+        if (entity.state === 'chase') {
+          revealIntensity = (0.25 + Math.sin(this.breathPhase * 4) * 0.15) * (1 - playerDist / this.passiveEntityRevealRadius);
+        }
         const entityColor = ENEMY_TEMPLATES[entity.type]?.glowColor || NEON_COLORS.stalkerGlow;
         this.illuminateArea(entity.pos, 1.5, revealIntensity, entityColor);
       }
@@ -3641,6 +3807,14 @@ export class EchoGameEngine {
     }
   }
 
+  private updateHazardIllumination() {
+    for (const hazard of this.hazards) {
+      const color = hazard.type === 'toxic' ? '#76ff03' : hazard.type === 'electric' ? '#ffab00' : '#ff1744';
+      const flickerAlpha = 0.1 + Math.sin(performance.now() * 0.003 + hazard.pos.x * 7) * 0.05;
+      this.illuminateArea(hazard.pos, hazard.radius, flickerAlpha, color);
+    }
+  }
+
   private updateFlares() {
     const now = performance.now();
     this.flares = this.flares.filter(f => now - f.startTime < f.duration);
@@ -4180,13 +4354,16 @@ export class EchoGameEngine {
     if (this.state === 'paused') {
       // Render the game scene underneath
       ctx.save();
-      ctx.translate(this.shakeX, this.shakeY);
+      ctx.translate(this.shakeX + this.screenShakeX, this.shakeY + this.screenShakeY);
       this.renderRaycast(ctx, w, h);
       this.renderEntities(ctx, w, h);
       this.renderEntityEffects(ctx, w, h);
       this.renderPulseWave(ctx, w, h);
       this.renderVignette(ctx, w, h);
       ctx.restore();
+      this.renderPostProcessing(ctx, w, h);
+      this.renderMinimap(ctx, w, h);
+      this.renderSoundWaves(ctx, w, h);
       this.renderHUD(ctx, w, h);
       this.renderPausedScreen(ctx, w, h);
       return;
@@ -4194,7 +4371,7 @@ export class EchoGameEngine {
 
     // Playing state
     ctx.save();
-    ctx.translate(this.shakeX, this.shakeY);
+    ctx.translate(this.shakeX + this.screenShakeX, this.shakeY + this.screenShakeY);
 
     // Ear role: render top-down map instead of first-person view
     if (this.coopEnabled && this.coopRole === 'ear') {
@@ -4226,6 +4403,15 @@ export class EchoGameEngine {
     }
 
     ctx.restore();
+
+    // Post-processing effects (after main view, before HUD)
+    this.renderPostProcessing(ctx, w, h);
+
+    // Minimap
+    this.renderMinimap(ctx, w, h);
+
+    // Sound wave visualization
+    this.renderSoundWaves(ctx, w, h);
 
     // Skip HUD entirely in hardcore mode (but still render crosshair)
     if (!this.hardcoreMode) {
@@ -4364,8 +4550,208 @@ export class EchoGameEngine {
     const fovRad = (this.advanced.fov * Math.PI) / 180;
 
     for (const entity of sortedEntities) {
-      // Phantom idle/teleporting/dead is invisible
-      if (entity.state === 'idle' || entity.isTeleporting || entity.state === 'dead') continue;
+      // Phantom idle/teleporting is invisible
+      if (entity.state === 'idle' || entity.isTeleporting) continue;
+
+      // ---- Death animations for dead entities ----
+      if (entity.state === 'dead' && entity.deathTimer > 0) {
+        const dx = entity.pos.x - p.pos.x;
+        const dy = entity.pos.y - p.pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 0.3 || dist > 20) continue;
+
+        const angle = Math.atan2(dy, dx) - p.dir;
+        let normAngle = angle;
+        while (normAngle > Math.PI) normAngle -= 2 * Math.PI;
+        while (normAngle < -Math.PI) normAngle += 2 * Math.PI;
+
+        const fovRad2 = (this.advanced.fov * Math.PI) / 180;
+        if (Math.abs(normAngle) > fovRad2 + 0.3) continue;
+
+        const screenX = w / 2 + (normAngle / fovRad2) * (w / 2);
+        const spriteHeight = h / dist;
+        const spriteWidth = spriteHeight * 0.5;
+        const drawY = (h - spriteHeight) / 2;
+
+        // Check basic illumination for death animation visibility
+        let illumination = 0;
+        for (const pulse of this.pulses) {
+          const distToOrigin = this.dist(entity.pos, pulse.origin);
+          const elapsed = now - pulse.startTime;
+          const progress2 = Math.min(1, elapsed / pulse.duration);
+          const currentRadius = pulse.radius * progress2;
+          if (distToOrigin < currentRadius) {
+            const fadeElapsed = now - (pulse.startTime + (distToOrigin / pulse.radius) * pulse.duration);
+            if (fadeElapsed < FADE_DURATION) {
+              const fadeIntensity = pulse.intensity * (1 - fadeElapsed / FADE_DURATION);
+              const distFade = 1 - distToOrigin / (pulse.radius + 1);
+              illumination = Math.max(illumination, fadeIntensity * distFade);
+            }
+          }
+        }
+        // Flashlight illumination for death anims
+        if (p.flashlightOn && this.hasLineOfSight(p.pos, entity.pos)) {
+          const entityAngle = Math.atan2(dy, dx);
+          let angleDiff = entityAngle - p.dir;
+          while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+          while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+          const flashHalfFov = (this.advanced.flashlightFov * Math.PI / 180) / 2;
+          if (Math.abs(angleDiff) < flashHalfFov) {
+            const angleFade = 1 - Math.abs(angleDiff) / flashHalfFov;
+            const distFade = Math.max(0.2, 1 - dist / this.advanced.renderDistance);
+            illumination = Math.max(illumination, this.advanced.flashlightIntensity * angleFade * distFade * 0.6);
+          }
+        }
+
+        if (illumination < 0.03) continue;
+
+        const deathProgress = 1 - entity.deathTimer; // 0 = just died, 1 = gone
+        const cx = screenX;
+        const baseY = drawY;
+        const sH = spriteHeight;
+        const sW = spriteWidth;
+
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, illumination * (1 - deathProgress * 0.5));
+
+        if (entity.type === 'devourer') {
+          // Devourer EXPLODES: expanding circles and scattered line fragments in red/orange
+          const explodeRadius = deathProgress * sW * 2;
+          const numParticles = 15;
+          // Expanding shockwave rings
+          for (let ring = 0; ring < 3; ring++) {
+            const ringR = explodeRadius * (0.5 + ring * 0.3);
+            const ringAlpha = (1 - deathProgress) * (1 - ring * 0.3);
+            ctx.strokeStyle = this.colorWithAlpha(ring === 0 ? '#ff6d00' : ring === 1 ? '#ff1744' : '#8b0000', ringAlpha * 0.6);
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, baseY + sH / 2, ringR, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          // Scattered line fragments
+          for (let i = 0; i < numParticles; i++) {
+            const pAngle = (i / numParticles) * Math.PI * 2 + deathProgress * 0.5;
+            const pDist = deathProgress * sW * 1.5 * (0.5 + Math.random() * 0.5);
+            const px = cx + Math.cos(pAngle) * pDist;
+            const py = baseY + sH / 2 + Math.sin(pAngle) * pDist;
+            ctx.strokeStyle = this.colorWithAlpha(i % 2 === 0 ? '#ff6d00' : '#ff1744', (1 - deathProgress) * 0.8);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(px + (Math.random() - 0.5) * sW * 0.3, py + (Math.random() - 0.5) * sH * 0.2);
+            ctx.stroke();
+          }
+        } else if (entity.type === 'abomination') {
+          // Abomination DISSOLVES: melts downward with dripping effect
+          const meltY = deathProgress * sH * 0.8;
+          const shrinkV = 1 - deathProgress * 0.7;
+          // Shrinking body
+          ctx.fillStyle = this.colorWithAlpha('#4a148c', (1 - deathProgress) * 0.5);
+          ctx.fillRect(cx - sW * 0.3 * shrinkV, baseY + sH * 0.2 + meltY * 0.5, sW * 0.6 * shrinkV, sH * 0.6 * shrinkV);
+          // Dripping lines
+          for (let i = 0; i < 8; i++) {
+            const dripX = cx + (i - 3.5) * sW * 0.12;
+            const dripLen = (deathProgress * sH * 0.5) * (0.5 + Math.random() * 0.5);
+            ctx.strokeStyle = this.colorWithAlpha('#9c27b0', (1 - deathProgress) * 0.6);
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(dripX, baseY + sH * 0.7);
+            ctx.lineTo(dripX + (Math.random() - 0.5) * 4, baseY + sH * 0.7 + dripLen);
+            ctx.stroke();
+          }
+        } else if (entity.type === 'arachnid') {
+          // Arachnid COLLAPSES: all 8 legs fold inward
+          const foldProgress = deathProgress;
+          const bodyY = baseY + sH * 0.4 + deathProgress * sH * 0.2;
+          // Collapsing body
+          ctx.fillStyle = this.colorWithAlpha('#1b5e20', (1 - deathProgress) * 0.5);
+          ctx.beginPath();
+          ctx.ellipse(cx, bodyY, sW * 0.25 * (1 - foldProgress * 0.5), sH * 0.15 * (1 - foldProgress * 0.5), 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Legs curling up
+          for (let leg = 0; leg < 8; leg++) {
+            const side = leg < 4 ? -1 : 1;
+            const legIdx = leg % 4;
+            const baseAngle = side * (0.3 + legIdx * 0.25);
+            const curlAngle = baseAngle * (1 - foldProgress * 0.8); // fold inward
+            const legLen = sW * 0.4 * (1 - foldProgress * 0.5);
+            ctx.strokeStyle = this.colorWithAlpha('#2e7d32', (1 - deathProgress) * 0.5);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(cx, bodyY);
+            ctx.lineTo(cx + Math.cos(curlAngle) * legLen * side, bodyY + Math.sin(Math.abs(curlAngle)) * legLen);
+            ctx.stroke();
+          }
+        } else if (entity.type === 'whisperer') {
+          // Whisperer STATIC-OUT: dissolves into TV static/noise
+          const staticIntensity = deathProgress;
+          const numPixels = Math.floor(100 * (1 - deathProgress));
+          for (let i = 0; i < numPixels; i++) {
+            const px = cx + (Math.random() - 0.5) * sW * (1 + staticIntensity);
+            const py = baseY + (Math.random() - 0.5) * sH * (1 + staticIntensity * 0.5);
+            const size = Math.random() * 4 + 1;
+            const brightness = Math.random();
+            ctx.fillStyle = brightness > 0.5
+              ? this.colorWithAlpha('#ffffff', (1 - deathProgress) * 0.4)
+              : this.colorWithAlpha('#37474f', (1 - deathProgress) * 0.5);
+            ctx.fillRect(px, py, size, size * 0.5);
+          }
+        } else if (entity.type === 'broodmother') {
+          // Broodmother MASSIVE EXPLOSION: burst of magenta particles and smaller parasites dying
+          const explodeRadius = deathProgress * sW * 3;
+          // Central burst
+          const burstGrad = ctx.createRadialGradient(cx, baseY + sH / 2, 0, cx, baseY + sH / 2, explodeRadius);
+          burstGrad.addColorStop(0, this.colorWithAlpha('#f50057', (1 - deathProgress) * 0.4));
+          burstGrad.addColorStop(0.5, this.colorWithAlpha('#880e4f', (1 - deathProgress) * 0.2));
+          burstGrad.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = burstGrad;
+          ctx.fillRect(cx - explodeRadius, baseY + sH / 2 - explodeRadius, explodeRadius * 2, explodeRadius * 2);
+          // Magenta particles
+          for (let i = 0; i < 20; i++) {
+            const pAngle = (i / 20) * Math.PI * 2 + deathProgress * 0.8;
+            const pDist = deathProgress * sW * 2 * (0.3 + Math.random() * 0.7);
+            const px = cx + Math.cos(pAngle) * pDist;
+            const py = baseY + sH / 2 + Math.sin(pAngle) * pDist;
+            ctx.fillStyle = this.colorWithAlpha(i % 3 === 0 ? '#f50057' : '#880e4f', (1 - deathProgress) * 0.7);
+            ctx.beginPath();
+            ctx.arc(px, py, 2 + Math.random() * 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          // Small parasite death particles
+          for (let i = 0; i < 8; i++) {
+            const pAngle = Math.random() * Math.PI * 2;
+            const pDist = deathProgress * sW * 1.2 * Math.random();
+            const px = cx + Math.cos(pAngle) * pDist;
+            const py = baseY + sH / 2 + Math.sin(pAngle) * pDist;
+            ctx.strokeStyle = this.colorWithAlpha('#f50057', (1 - deathProgress * 1.5) * 0.5);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(px - 3, py);
+            ctx.lineTo(px + 3, py);
+            ctx.stroke();
+          }
+        } else {
+          // Generic death (stalker/hunter/phantom): fade out with a red flash
+          // Red flash at the beginning
+          if (deathProgress < 0.3) {
+            const flashAlpha = (1 - deathProgress / 0.3) * 0.4;
+            ctx.fillStyle = this.colorWithAlpha('#ff0000', flashAlpha);
+            ctx.fillRect(cx - sW * 0.5, baseY, sW, sH);
+          }
+          // Fading silhouette
+          const template2 = ENEMY_TEMPLATES[entity.type];
+          ctx.fillStyle = this.colorWithAlpha(template2?.color || '#8b0000', (1 - deathProgress) * 0.4);
+          ctx.beginPath();
+          ctx.ellipse(cx, baseY + sH * 0.5, sW * 0.3 * (1 - deathProgress), sH * 0.3 * (1 - deathProgress), 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+        continue;
+      }
+
+      // Skip fully dead entities (deathTimer <= 0)
+      if (entity.state === 'dead') continue;
 
       const dx = entity.pos.x - p.pos.x;
       const dy = entity.pos.y - p.pos.y;
@@ -6224,6 +6610,153 @@ export class EchoGameEngine {
     ctx.fillRect(0, 0, w, h);
   }
 
+  // ---- Post-processing effects ----
+
+  private renderPostProcessing(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    // 1. Film grain
+    const grainCount = 2000;
+    for (let i = 0; i < grainCount; i++) {
+      const alpha = this.filmGrainIntensity + Math.random() * 0.02;
+      const bright = Math.random() > 0.5;
+      ctx.fillStyle = bright
+        ? `rgba(255,255,255,${alpha})`
+        : `rgba(0,0,0,${alpha})`;
+      ctx.fillRect(Math.random() * w, Math.random() * h, 1, 1);
+    }
+
+    // 2. Enhanced vignette (more intense when player health is low)
+    const healthRatio = this.player.health / this.player.maxHealth;
+    const vignetteIntensity = 0.65 + (1 - healthRatio) * 0.25;
+    const innerRadius = w * (0.2 + healthRatio * 0.1);
+    const gradient = ctx.createRadialGradient(w / 2, h / 2, innerRadius, w / 2, h / 2, w * 0.7);
+    gradient.addColorStop(0, 'rgba(0,0,0,0)');
+    gradient.addColorStop(0.5, `rgba(0,0,0,${0.15 * (1 - healthRatio)})`);
+    gradient.addColorStop(1, `rgba(0,0,0,${vignetteIntensity})`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    // 3. Damage flash
+    if (this.damageFlashAlpha > 0) {
+      ctx.fillStyle = `rgba(255,0,0,${this.damageFlashAlpha})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    // 4. Chromatic aberration lines at edges when damaged
+    if (this.damageFlashAlpha > 0.05 || this.glitchIntensity > 0.05) {
+      const aberrationStrength = Math.max(this.damageFlashAlpha, this.glitchIntensity);
+      const lineCount = Math.floor(aberrationStrength * 30);
+      // Red channel offset (left side)
+      ctx.fillStyle = `rgba(255,0,0,${aberrationStrength * 0.15})`;
+      for (let i = 0; i < lineCount; i++) {
+        const y = Math.random() * h;
+        const thickness = 1 + Math.random() * 2;
+        ctx.fillRect(0, y, Math.random() * 15 * aberrationStrength, thickness);
+      }
+      // Blue channel offset (right side)
+      ctx.fillStyle = `rgba(0,100,255,${aberrationStrength * 0.15})`;
+      for (let i = 0; i < lineCount; i++) {
+        const y = Math.random() * h;
+        const thickness = 1 + Math.random() * 2;
+        ctx.fillRect(w - Math.random() * 15 * aberrationStrength, y, Math.random() * 15 * aberrationStrength, thickness);
+      }
+    }
+  }
+
+  // ---- Sound wave visualization ----
+
+  private renderSoundWaves(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const p = this.player;
+    if (p.noiseLevel > 0.1) {
+      const waveCount = Math.min(4, Math.floor(p.noiseLevel * 3));
+      const cx = w / 2;
+      const cy = h / 2;
+      for (let i = 0; i < waveCount; i++) {
+        const phase = (performance.now() / 500 + i * 0.5) % 1;
+        const radius = 20 + phase * 60;
+        const alpha = (1 - phase) * 0.3 * p.noiseLevel;
+        ctx.strokeStyle = `rgba(0, 229, 255, ${alpha})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // ---- Minimap with fog of war ----
+
+  private renderMinimap(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const mmSize = 100;
+    const mmX = w - mmSize - 8;
+    const mmY = 8;
+    const cellSize = 2;
+
+    // Background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(mmX - 2, mmY - 2, mmSize + 4, mmSize + 4);
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.3)';
+    ctx.strokeRect(mmX - 2, mmY - 2, mmSize + 4, mmSize + 4);
+
+    const viewCells = mmSize / cellSize;
+    const halfView = viewCells / 2;
+    const p = this.player;
+    const baseX = Math.floor(p.pos.x) - halfView;
+    const baseY = Math.floor(p.pos.y) - halfView;
+
+    for (let cy = 0; cy < viewCells; cy++) {
+      for (let cx = 0; cx < viewCells; cx++) {
+        const mapX = Math.floor(baseX + cx);
+        const mapY = Math.floor(baseY + cy);
+        if (mapX < 0 || mapY < 0 || mapX >= this.map.width || mapY >= this.map.height) continue;
+        const key = `${mapX},${mapY}`;
+        if (!this.exploredCells.has(key)) continue;
+
+        const cell = this.map.cells[mapY][mapX];
+        if (cell.wall) {
+          ctx.fillStyle = 'rgba(0, 229, 255, 0.4)';
+          ctx.fillRect(mmX + cx * cellSize, mmY + cy * cellSize, cellSize, cellSize);
+        } else if (cell.value === 2) { // exit
+          ctx.fillStyle = 'rgba(118, 255, 3, 0.6)';
+          ctx.fillRect(mmX + cx * cellSize, mmY + cy * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+
+    // Player dot
+    const playerMMX = mmX + (p.pos.x - baseX) * cellSize;
+    const playerMMY = mmY + (p.pos.y - baseY) * cellSize;
+    ctx.fillStyle = '#00e5ff';
+    ctx.beginPath();
+    ctx.arc(playerMMX, playerMMY, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Player direction
+    const dirLen = 5;
+    ctx.strokeStyle = '#00e5ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(playerMMX, playerMMY);
+    ctx.lineTo(playerMMX + Math.cos(p.dir) * dirLen, playerMMY + Math.sin(p.dir) * dirLen);
+    ctx.stroke();
+
+    // Entity dots (only if nearby)
+    for (const entity of this.entities) {
+      if (entity.state === 'dead') continue;
+      const ex = mmX + (entity.pos.x - baseX) * cellSize;
+      const ey = mmY + (entity.pos.y - baseY) * cellSize;
+      const entityDist = this.dist(entity.pos, p.pos);
+      if (entityDist < 8) {
+        const template = ENEMY_TEMPLATES[entity.type];
+        ctx.fillStyle = template.color;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.arc(ex, ey, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
   // ============================================================
   // HUD rendering
   // ============================================================
@@ -6670,8 +7203,221 @@ export class EchoGameEngine {
   // Utility methods
   // ============================================================
 
-  private dist(a: Vec2, b: Vec2): number {
+  dist(a: Vec2, b: Vec2): number {
     return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+  }
+
+  // ============================================================
+  // Performance rank calculation
+  // ============================================================
+
+  getPerformanceRank(): { rank: string; score: number; details: Record<string, number> } {
+    let score = 100;
+
+    // Speed bonus: faster = better
+    const timeSecs = (performance.now() - this.gameStartTime) / 1000;
+    const timeMins = timeSecs / 60;
+    const expectedMins = 5; // 5 minutes expected per chapter
+    if (timeMins < expectedMins * 0.5) score += 20;
+    else if (timeMins < expectedMins) score += 10;
+    else if (timeMins > expectedMins * 2) score -= 20;
+
+    // Damage taken penalty
+    score -= Math.min(30, this.totalDamageTaken * 0.3);
+
+    // Kill bonus
+    score += Math.min(15, this.killCount * 3);
+
+    // Health bonus
+    if (this.player.health === this.player.maxHealth) score += 10;
+    else if (this.player.health > this.player.maxHealth * 0.5) score += 5;
+
+    score = Math.max(0, Math.min(100, score));
+
+    let rank = 'D';
+    if (score >= 90) rank = 'S';
+    else if (score >= 75) rank = 'A';
+    else if (score >= 60) rank = 'B';
+    else if (score >= 40) rank = 'C';
+
+    return {
+      rank,
+      score: Math.round(score),
+      details: {
+        time: Math.round(timeSecs),
+        kills: this.killCount,
+        damageDealt: Math.round(this.totalDamageDealt),
+        damageTaken: Math.round(this.totalDamageTaken),
+        healthRemaining: Math.round(this.player.health),
+        enemiesTotal: this.entities.length,
+      }
+    };
+  }
+
+  // ============================================================
+  // Full Backup System
+  // ============================================================
+
+  /** Create a complete backup of the current game state */
+  createFullBackup(): FullBackupData | null {
+    if (!this.player || !this.map) return null;
+    const p = this.player;
+    return buildFullBackup({
+      playerPos: { x: p.pos.x, y: p.pos.y },
+      playerDir: p.dir,
+      playerHealth: p.health,
+      playerMaxHealth: p.maxHealth,
+      playerStamina: p.stamina,
+      playerMaxStamina: p.maxStamina,
+      playerFlashlightOn: p.flashlightOn,
+      playerFlashlightBattery: p.flashlightBattery,
+      playerMaxFlashlightBattery: p.maxFlashlightBattery,
+      playerNoiseLevel: p.noiseLevel,
+      playerIsSneaking: p.isSneaking,
+      playerEquippedWeapon: p.equippedWeapon,
+      playerAttackCooldown: p.attackCooldown,
+      playerWebbed: p.webbed,
+      playerWebTimer: p.webTimer,
+      playerParalyzed: p.paralyzed,
+      playerParalyzeTimer: p.paralyzeTimer,
+      playerSelectedSlot: p.selectedSlot,
+      inventory: p.inventory.map(s => ({ itemId: s.item.id, count: s.count, uses: s.uses || 0 })),
+      entities: this.entities.map(e => ({
+        id: e.id, type: e.type, pos: { x: e.pos.x, y: e.pos.y },
+        state: e.state, health: e.health, maxHealth: e.maxHealth,
+        speed: e.speed, hearingRange: e.hearingRange, stateTimer: e.stateTimer,
+        patrolAngle: e.patrolAngle, stunTimer: e.stunTimer, hitFlashTimer: e.hitFlashTimer,
+        deathTimer: e.deathTimer, damage: e.damage,
+      })),
+      exploredCells: Array.from(this.exploredCells),
+      killCount: this.killCount,
+      totalDamageDealt: this.totalDamageDealt,
+      totalDamageTaken: this.totalDamageTaken,
+      currentChapter: this.currentChapter,
+      difficulty: this.difficulty,
+      hardcoreMode: this.hardcoreMode,
+      coopRole: this.coopRole,
+      sonarMode: this.sonarMode,
+      playTime: 0,
+      playerName: this.profile?.playerName || 'Jugador',
+      unlockedChapters: 6,
+      profile: this.profile as unknown as Record<string, unknown>,
+      advanced: this.advanced as unknown as Record<string, unknown>,
+      controls: (this.controls || []).map(c => ({ action: c.action, label: c.label, key: c.key })),
+      unlockedCharacters: [],
+      bestTimes: [],
+      totalPoints: this.totalPoints || 0,
+      achievements: [],
+      hazards: this.hazards.map(h => ({
+        x: h.pos.x, y: h.pos.y, type: h.type, radius: h.radius,
+        timer: h.timer, damagePerSec: h.damagePerSec,
+      })),
+    });
+  }
+
+  /** Save backup to a specific slot (1-3) */
+  saveBackupToSlot(slot: number): boolean {
+    const backup = this.createFullBackup();
+    if (!backup) return false;
+    return saveToSlot(slot, backup);
+  }
+
+  /** Restore game state from a backup */
+  restoreFullBackup(data: FullBackupData): boolean {
+    try {
+      // Re-initialize level for the chapter
+      const chapter = CHAPTERS.find(c => c.id === data.currentChapter);
+      if (!chapter) return false;
+
+      // Start the game with the backup's chapter and difficulty
+      this.startGame(data.currentChapter, data.difficulty as Difficulty, data.hardcoreMode, data.coopRole as CoopRole);
+
+      // Restore player state
+      const p = this.player;
+      p.pos = { x: data.playerPos.x, y: data.playerPos.y };
+      p.dir = data.playerDir;
+      p.health = data.playerHealth;
+      p.maxHealth = data.playerMaxHealth;
+      p.stamina = data.playerStamina;
+      p.maxStamina = data.playerMaxStamina;
+      p.flashlightOn = data.playerFlashlightOn;
+      p.flashlightBattery = data.playerFlashlightBattery;
+      p.maxFlashlightBattery = data.playerMaxFlashlightBattery;
+      p.isSneaking = data.playerIsSneaking;
+      p.equippedWeapon = data.playerEquippedWeapon;
+      p.attackCooldown = data.playerAttackCooldown;
+      p.webbed = data.playerWebbed;
+      p.webTimer = data.playerWebTimer;
+      p.paralyzed = data.playerParalyzed;
+      p.paralyzeTimer = data.playerParalyzeTimer;
+      p.selectedSlot = data.playerSelectedSlot;
+
+      // Restore inventory
+      p.inventory = data.inventory.map(inv => {
+        const itemDef = ITEM_BY_ID(inv.itemId);
+        return itemDef ? { item: itemDef, count: inv.count, uses: inv.uses } : null;
+      }).filter(Boolean) as InventorySlot[];
+
+      // Restore entities
+      this.entities = data.entities.map(e => {
+        const template = ENEMY_TEMPLATES[e.type as EnemyType];
+        return {
+          id: e.id, type: e.type as EnemyType,
+          pos: { x: e.pos.x, y: e.pos.y },
+          targetPos: null,
+          state: e.state as EntityState,
+          health: e.health, maxHealth: e.maxHealth,
+          speed: e.speed, hearingRange: e.hearingRange,
+          lastHeardSound: null, lastHeardTime: 0,
+          stateTimer: e.stateTimer, patrolAngle: e.patrolAngle,
+          animPhase: Math.random() * Math.PI * 2,
+          killTimer: 0, hitFlashTimer: e.hitFlashTimer,
+          deathTimer: e.deathTimer, damage: e.damage,
+          stunTimer: e.stunTimer,
+          teleportCooldown: 0, isTeleporting: false, teleportTimer: 0,
+          rushTimer: 0, persistenceTimer: 0,
+          chargeTimer: 0, isCharging: false,
+          webCooldown: 0, whisperTimer: 0, illusionTimer: 0,
+          spawnTimer: 0, parasiteIds: [],
+        };
+      });
+
+      // Restore explored cells
+      this.exploredCells = new Set(data.exploredCells);
+
+      // Restore combat stats
+      this.killCount = data.killCount;
+      this.totalDamageDealt = data.totalDamageDealt;
+      this.totalDamageTaken = data.totalDamageTaken;
+
+      // Restore sonar mode
+      this.sonarMode = data.sonarMode as SonarMode;
+
+      // Restore hazards
+      this.hazards = data.hazards.map(h => ({
+        pos: { x: h.x, y: h.y },
+        type: h.type as 'toxic' | 'electric' | 'collapsing',
+        radius: h.radius, timer: h.timer, damagePerSec: h.damagePerSec,
+      }));
+
+      // Clear crash recovery since we restored successfully
+      clearCrashRecovery();
+
+      return true;
+    } catch (e) {
+      console.error('Failed to restore backup:', e);
+      return false;
+    }
+  }
+
+  /** Check if there's crash recovery data available */
+  static hasCrashRecovery(): boolean {
+    return hasCrashRecovery();
+  }
+
+  /** Load crash recovery data */
+  static loadCrashRecoveryData(): FullBackupData | null {
+    return loadCrashRecovery();
   }
 
   private colorWithAlpha(hex: string, alpha: number): string {
@@ -7427,6 +8173,97 @@ export class EchoGameEngine {
         }
         break;
       }
+
+      case 'heartbeat': {
+        // Pulsing red vignette simulating heartbeat
+        const pulse = Math.sin(this.cinematicTimer * 6);
+        const pulseIntensity = Math.max(0, pulse) * intensity;
+        const grad = ctx.createRadialGradient(w / 2, h / 2, w * 0.1, w / 2, h / 2, w * 0.6);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(0.4, this.colorWithAlpha('#8b0000', pulseIntensity * 0.15));
+        grad.addColorStop(1, this.colorWithAlpha('#ff0000', pulseIntensity * 0.6));
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Brief bright flash at pulse peak
+        if (pulse > 0.9) {
+          ctx.fillStyle = this.colorWithAlpha('#ff0000', (pulse - 0.9) * 2 * intensity);
+          ctx.fillRect(0, 0, w, h);
+        }
+        break;
+      }
+
+      case 'glitch_text': {
+        // Text with random horizontal offset and distortion
+        if (frame.text) {
+          const revealCount = Math.floor(frame.text.length * Math.min(1, progress * 1.5));
+          const displayText = frame.text.substring(0, revealCount);
+
+          ctx.save();
+
+          // Random glitch offset every few frames
+          const glitchOffsetX = Math.random() < 0.3 ? (Math.random() - 0.5) * 20 : 0;
+          const glitchOffsetY = Math.random() < 0.2 ? (Math.random() - 0.5) * 10 : 0;
+
+          // Glitch colors: occasionally show in a different color
+          const glitchColors = ['#ff1744', '#00ff00', '#00e5ff', '#ff00ff', '#ffff00'];
+          const useGlitchColor = Math.random() < 0.15;
+          const textColor = useGlitchColor ? glitchColors[Math.floor(Math.random() * glitchColors.length)] : color;
+
+          ctx.shadowColor = textColor;
+          ctx.shadowBlur = 25;
+          ctx.fillStyle = textColor;
+          ctx.font = `bold ${Math.min(32, w / 22)}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(displayText, w / 2 + glitchOffsetX, h / 2 + glitchOffsetY);
+
+          // Chromatic aberration slices
+          if (Math.random() < 0.4) {
+            const sliceY = Math.random() * h;
+            const sliceH = Math.random() * 20 + 5;
+            try {
+              const imgData = ctx.getImageData(0, Math.floor(sliceY), w, Math.ceil(sliceH));
+              ctx.putImageData(imgData, Math.floor((Math.random() - 0.5) * 30), Math.floor(sliceY));
+            } catch {
+              // Ignore canvas security errors
+            }
+          }
+
+          // Random distortion bars
+          for (let i = 0; i < 3; i++) {
+            if (Math.random() < 0.3) {
+              const barY = Math.random() * h;
+              ctx.fillStyle = this.colorWithAlpha(textColor, 0.3);
+              ctx.fillRect(0, barY, w, 2);
+            }
+          }
+
+          ctx.restore();
+        }
+        break;
+      }
+
+      case 'whisper': {
+        // Very faint text that fades in and out quickly
+        if (frame.text) {
+          // Quick fade in then fade out
+          const fadeProgress = progress < 0.3 ? progress / 0.3 : (1 - progress) / 0.7;
+          const alpha = Math.max(0.05, fadeProgress * 0.4);
+
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 10;
+          ctx.fillStyle = color;
+          ctx.font = `${Math.min(22, w / 30)}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(frame.text, w / 2, h / 2);
+          ctx.restore();
+        }
+        break;
+      }
     }
 
     // Skip hint at bottom
@@ -7530,15 +8367,64 @@ export class EchoGameEngine {
 
   static readonly INTRO_CINEMATIC: CinematicFrame[] = [
     { duration: 2, type: 'blackout' },
+    { duration: 2, type: 'fade_in' },
+    { duration: 4, type: 'text', text: 'Año 2047. Proyecto Eco.', color: '#00e5ff' },
+    { duration: 1.5, type: 'fade_out' },
+    { duration: 5, type: 'text', text: 'Querían curar la ceguera con sonido.', color: '#888888' },
+    { duration: 3, type: 'glitch_text', text: 'PERO EL SONIDO LOS CAMBIÓ.', color: '#ff1744' },
+    { duration: 1, type: 'fade_out' },
+    { duration: 1, type: 'blackout' },
+    { duration: 3, type: 'heartbeat' },
+    { duration: 2, type: 'whisper', text: '¿Me escuchas?', color: '#9c27b0' },
+    { duration: 2, type: 'fade_in' },
+    { duration: 5, type: 'text', text: 'Los sujetos perdieron los ojos... pero sus oídos se amplificaron cien veces.', color: '#888888' },
+    { duration: 2, type: 'scanlines', intensity: 0.5 },
+    { duration: 4, type: 'text', text: 'Ahora escuchan TODO.', color: '#ff1744' },
+    { duration: 3, type: 'text', text: 'Cada paso.', color: '#ff6d00' },
+    { duration: 3, type: 'text', text: 'Cada respiración.', color: '#ff6d00' },
+    { duration: 3, type: 'text', text: 'Cada latido.', color: '#ff0000' },
+    { duration: 2, type: 'heartbeat' },
+    { duration: 2, type: 'static', intensity: 0.7 },
+    { duration: 1, type: 'fade_out' },
+    { duration: 4, type: 'text', text: 'La oscuridad no es tu enemiga.', color: '#00e5ff' },
+    { duration: 4, type: 'text', text: 'El silencio sí.', color: '#ff1744' },
+    { duration: 3, type: 'warning', text: '⚠️ USA AURICULARES', color: '#ffd600' },
+    { duration: 2, type: 'fade_out' },
+    { duration: 2, type: 'pulse_wave', intensity: 1.0 },
+    { duration: 5, type: 'text', text: 'ECHOES OF THE STATIC', color: '#00e5ff', subtext: 'Ecos de la Estática' },
+    { duration: 2, type: 'fade_out' },
+  ];
+
+  static readonly STORY_CINEMATIC: CinematicFrame[] = [
+    { duration: 3, type: 'blackout' },
     { duration: 3, type: 'fade_in' },
-    { duration: 5, type: 'text', text: 'No recuerdas cómo llegaste aquí.', color: '#ffffff' },
+    { duration: 5, type: 'text', text: 'Antes del Silencio, el mundo podía ver.', color: '#888888' },
     { duration: 2, type: 'fade_out' },
-    { duration: 4, type: 'text', text: 'Solo silencio...', color: '#0097a7' },
-    { duration: 3, type: 'text', text: 'y algo que se mueve en la oscuridad.', color: '#ff1744' },
+    { duration: 5, type: 'text', text: 'El Proyecto Eco prometió devolver la luz a los ciegos.', color: '#00e5ff' },
+    { duration: 4, type: 'text', text: 'Usaron frecuencias sónicas para mapear el cerebro.', color: '#888888' },
+    { duration: 3, type: 'glitch_text', text: 'Algo salió mal.', color: '#ff1744' },
+    { duration: 2, type: 'static', intensity: 0.6 },
+    { duration: 5, type: 'text', text: 'Los sujetos no recuperaron la vista.', color: '#888888' },
+    { duration: 4, type: 'text', text: 'Pero empezaron a ESCUCHAR.', color: '#9c27b0' },
+    { duration: 3, type: 'heartbeat' },
+    { duration: 2, type: 'whisper', text: 'Estamos aquí...', color: '#9c27b0' },
+    { duration: 5, type: 'text', text: 'Las frecuencias abrieron algo entre dimensiones.', color: '#888888' },
+    { duration: 4, type: 'text', text: 'Y lo que salió... tiene hambre.', color: '#ff1744' },
+    { duration: 2, type: 'scanlines', intensity: 0.8 },
+    { duration: 4, type: 'entity_reveal', intensity: 1.0 },
+    { duration: 3, type: 'text', text: 'El Devorador fue el primero.', color: '#8b0000' },
+    { duration: 3, type: 'text', text: 'Luego vino la Abominación.', color: '#4a148c' },
+    { duration: 3, type: 'text', text: 'La Arácnida surgió de las cloacas.', color: '#1b5e20' },
+    { duration: 3, type: 'text', text: 'El Susurrador... nadie sabe de dónde vino.', color: '#263238' },
+    { duration: 3, type: 'text', text: 'Y La Madre... ella los crea a todos.', color: '#880e4f' },
+    { duration: 2, type: 'heartbeat' },
+    { duration: 3, type: 'static', intensity: 0.9 },
     { duration: 2, type: 'fade_out' },
-    { duration: 3, type: 'scanlines', intensity: 0.3 },
-    { duration: 5, type: 'text', text: 'Capítulo 1: El Despertar', color: '#00e5ff' },
-    { duration: 2, type: 'fade_out' },
+    { duration: 5, type: 'text', text: 'Tú eres el último sujeto que despierta.', color: '#00e5ff' },
+    { duration: 4, type: 'text', text: 'Usa el sonido como arma.', color: '#ff6d00' },
+    { duration: 4, type: 'text', text: 'Pero recuerda: ellos también escuchan.', color: '#ff1744' },
+    { duration: 3, type: 'warning', text: '☠️ CADA SONIDO TE ACERCA A LA MUERTE ☠️', color: '#ff1744' },
+    { duration: 3, type: 'fade_out' },
   ];
 
   // ============================================================

@@ -62,3 +62,32 @@ Stage Summary:
 - Game controls (joystick, buttons) optimized for smaller displays
 - Safe area insets handle notched phones properly
 - 100dvh used instead of 100vh to handle mobile browser chrome
+---
+Task ID: backup-system-and-improvements
+Agent: main
+Task: Implement full backup system and verify all 10 improvements
+
+Work Log:
+- Created backupSystem.ts with FullBackupData interface, 3-slot backup, crash recovery, export/import
+- Added createFullBackup(), restoreFullBackup(), saveBackupToSlot() to engine.ts
+- Added auto crash-recovery save every 30 seconds during gameplay
+- Added Backup Manager UI with slots, export/import, crash recovery detection
+- Added crash recovery banner to main menu
+- Added "📖 HISTORIA COMPLETA" button to menu for STORY_CINEMATIC
+- Added 3 backup slot buttons to pause menu
+- Verified all 10 improvements are in place:
+  1. Story cinematic (INTRO_CINEMATIC + STORY_CINEMATIC with heartbeat/glitch_text/whisper)
+  2. Monster death animations (per-type: explode, dissolve, collapse, static-out, burst)
+  3. Dynamic lighting (flicker timer, lightning flash, entity glow pulses)
+  4. Screen post-processing (film grain, vignette, chromatic aberration, damage flash, screen shake)
+  5. Sound wave visualization (concentric circles around crosshair)
+  6. Minimap with fog of war (explored cells, entity dots, player direction)
+  7. Kill counter & combat stats (HUD top-left)
+  8. Weapon stats in inventory UI
+  9. Environmental hazards (toxic/electric/collapsing zones)
+  10. Victory/stats screen with S-rank system
+
+Stage Summary:
+- Full backup system with 3 slots + crash recovery + file export/import
+- All 10 improvements verified and working
+- Lint passes, dev server compiles successfully
