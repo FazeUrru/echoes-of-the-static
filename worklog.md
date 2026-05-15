@@ -91,3 +91,43 @@ Stage Summary:
 - Full backup system with 3 slots + crash recovery + file export/import
 - All 10 improvements verified and working
 - Lint passes, dev server compiles successfully
+---
+Task ID: gore-blood-system
+Agent: Main
+Task: Add realistic blood/gore system, heart-rip mechanic, dismemberment, visceral death scenes
+
+Work Log:
+- Added 7 new type definitions to types.ts: BloodPool, BloodSplash, BodyPart, DismembermentInfo, HeartRipState, GoreConfig, GoreEventType
+- Added 5 new constants to types.ts: DEFAULT_GORE_CONFIG, EMPTY_DISMEMBERMENT, DEFAULT_HEART_RIP_STATE, GORY_DEATH_MESSAGES, MONSTER_BLOOD_COLORS
+- Added 6 new gore fields to Player interface: heartRip, isBleeding, bleedingIntensity, bloodTrailTimer, lastGoreEvent, goreEventTimer
+- Added 8 new gore fields to Entity interface: dismemberment, bloodTrailTimer, isBleeding, bleedingIntensity, lastGoreEvent, goreEventTimer, headless, gutSpilled
+- Implemented complete gore system in engine.ts with 15 gore methods:
+  - spawnBloodPool(), spawnBloodSplash(), spawnBodyPart() - create gore elements
+  - processGoreEvent() - handles 10 gore event types (blood_spray, dismemberment, head_explode, heart_rip, gut_spill, decapitation, arterial_spray, flesh_tear, bone_break, eye_pop)
+  - updateGoreSystem(), updateHeartRip(), attemptHeartRip(), updateBleeding() - frame updates
+  - damageEntityGore(), damagePlayerGore() - combat gore hooks
+- Added 3 rendering methods: renderGoreFloor(), renderBodyParts(), renderBloodOverlay()
+- Body parts have unique visual rendering per type (arm, leg, head, heart, organ, rib, eye, tentacle, torso)
+- Heart-rip mechanic: Devourer and Broodmother can grab and extract player's heart (2-second animation, can escape by moving)
+- Heart rip shows pulsating heart on screen, red vignette, "¡TE ARRANCAN EL CORAZÓN!" text
+- Dismemberment: entities lose limbs when taking high damage at low health (arms, legs, head)
+- Blood trails: bleeding entities and players leave blood trails on the floor
+- Toxic blood: Abomination, Arachnid, and Broodmother have toxic blood that damages the player
+- Monster blood colors: each monster type has unique fresh/dried blood colors
+- Environmental gore: levels spawn with dried blood pools and old body parts from previous victims
+- Screen blood overlay: spray, drip, smear, and handprint effects when damaged
+- Gory death messages in Spanish for different death types (heartRip, dismemberment, devoured, decapitation, generic)
+- Death screen shows death message, blood pool count, body part count
+- Heart-rip and bleeding status indicators in HUD
+- Landing page updated with gore feature descriptions
+- Updated EchoGame.tsx engineLiveState polling to include heartRipping, heartRipProgress, playerBleeding, bleedingIntensity, deathMessage, bloodPoolCount, bodyPartCount
+
+Stage Summary:
+- Complete realistic gore/blood system implemented
+- Heart-rip mechanic with visual feedback and escape mechanism
+- Dismemberment system with 7 body part types and unique rendering
+- Blood pools, trails, and screen splashes
+- Toxic blood mechanic for certain monster types
+- Environmental gore spawns on level start
+- Visceral Spanish death messages
+- All lint checks pass, dev server runs correctly

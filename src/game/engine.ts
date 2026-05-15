@@ -38,6 +38,18 @@ import {
   PingMarker,
   CustomLevel,
   EditorCell,
+  BloodPool,
+  BloodSplash,
+  BodyPart,
+  DismembermentInfo,
+  HeartRipState,
+  GoreConfig,
+  GoreEventType,
+  DEFAULT_GORE_CONFIG,
+  EMPTY_DISMEMBERMENT,
+  DEFAULT_HEART_RIP_STATE,
+  GORY_DEATH_MESSAGES,
+  MONSTER_BLOOD_COLORS,
 } from './types';
 import {
   generateLevel,
@@ -157,6 +169,15 @@ export class EchoGameEngine {
 
   // ---- Environmental hazards ----
   hazards: { pos: Vec2; type: 'toxic' | 'electric' | 'collapsing'; radius: number; timer: number; damagePerSec: number }[] = [];
+
+  // ---- Gore system ----
+  goreConfig: GoreConfig = { ...DEFAULT_GORE_CONFIG };
+  bloodPools: BloodPool[] = [];
+  bloodSplashs: BloodSplash[] = [];
+  bodyParts: BodyPart[] = [];
+  goreEventQueue: { type: GoreEventType; pos: Vec2; entityId?: number; intensity: number }[] = [];
+  playerDeathMessage: string = '';
+  playerDeathType: string = 'generic';
 
   // ---- Entity afterimage trails ----
   private entityAfterimages: Array<{
@@ -448,6 +469,12 @@ export class EchoGameEngine {
       webTimer: 0,
       paralyzed: false,
       paralyzeTimer: 0,
+      heartRip: { ...DEFAULT_HEART_RIP_STATE },
+      isBleeding: false,
+      bleedingIntensity: 0,
+      bloodTrailTimer: 0,
+      lastGoreEvent: null,
+      goreEventTimer: 0,
     };
 
     // Spawn entities at marked positions
@@ -490,6 +517,14 @@ export class EchoGameEngine {
               illusionTimer: 0,
               spawnTimer: 0,
               parasiteIds: [],
+              dismemberment: { ...EMPTY_DISMEMBERMENT },
+              bloodTrailTimer: 0,
+              isBleeding: false,
+              bleedingIntensity: 0,
+              lastGoreEvent: null,
+              goreEventTimer: 0,
+              headless: false,
+              gutSpilled: false,
             });
           }
         }
@@ -574,6 +609,12 @@ export class EchoGameEngine {
       webTimer: 0,
       paralyzed: false,
       paralyzeTimer: 0,
+      heartRip: { ...DEFAULT_HEART_RIP_STATE },
+      isBleeding: false,
+      bleedingIntensity: 0,
+      bloodTrailTimer: 0,
+      lastGoreEvent: null,
+      goreEventTimer: 0,
     };
 
     // Spawn entities based on chapter definition
@@ -626,6 +667,14 @@ export class EchoGameEngine {
           illusionTimer: 0,
           spawnTimer: 0,
           parasiteIds: [],
+          dismemberment: { ...EMPTY_DISMEMBERMENT },
+          bloodTrailTimer: 0,
+          isBleeding: false,
+          bleedingIntensity: 0,
+          lastGoreEvent: null,
+          goreEventTimer: 0,
+          headless: false,
+          gutSpilled: false,
         });
       }
     }
@@ -648,6 +697,58 @@ export class EchoGameEngine {
     this.totalDamageDealt = 0;
     this.totalDamageTaken = 0;
     this.hazards = [];
+
+    // Reset gore system
+    this.bloodPools = [];
+    this.bloodSplashs = [];
+    this.bodyParts = [];
+    this.goreEventQueue = [];
+    this.playerDeathMessage = '';
+    this.playerDeathType = 'generic';
+
+    // Spawn environmental gore - blood stains and body parts from previous victims
+    const envGoreCount = 5 + Math.floor(Math.random() * 8);
+    for (let i = 0; i < envGoreCount; i++) {
+      const gx = 3 + Math.random() * (this.map.width - 6);
+      const gy = 3 + Math.random() * (this.map.height - 6);
+      if (isWalkable(this.map, gx, gy)) {
+        // Blood pools (dried, old)
+        this.bloodPools.push({
+          pos: { x: gx, y: gy },
+          radius: 0.3 + Math.random() * 0.8,
+          alpha: 0.15 + Math.random() * 0.25,
+          age: 30 + Math.random() * 30, // Already old
+          maxAge: this.goreConfig.bloodPoolDuration,
+          color: Math.random() > 0.3 ? '#4a0000' : '#1a3a0a', // dried red or toxic green
+          isToxic: Math.random() > 0.8,
+        });
+      }
+    }
+
+    // Spawn a few body parts from previous victims
+    const envPartCount = 1 + Math.floor(Math.random() * 3);
+    const partTypes: BodyPart['partType'][] = ['arm', 'leg', 'rib', 'head', 'organ'];
+    const monsterTypes: EnemyType[] = ['stalker', 'hunter', 'phantom', 'devourer', 'abomination'];
+    for (let i = 0; i < envPartCount; i++) {
+      const px = 3 + Math.random() * (this.map.width - 6);
+      const py = 3 + Math.random() * (this.map.height - 6);
+      if (isWalkable(this.map, px, py)) {
+        const partType = partTypes[Math.floor(Math.random() * partTypes.length)];
+        const monsterType = monsterTypes[Math.floor(Math.random() * monsterTypes.length)];
+        const bloodColors = MONSTER_BLOOD_COLORS[monsterType];
+        this.bodyParts.push({
+          pos: { x: px, y: py },
+          partType,
+          rotation: Math.random() * Math.PI * 2,
+          alpha: 0.3 + Math.random() * 0.3, // Faded - been here a while
+          age: 40 + Math.random() * 60, // Old
+          maxAge: 120,
+          color: bloodColors.dried,
+          isDripping: false, // Not dripping anymore
+          entityType: monsterType,
+        });
+      }
+    }
 
     // Spawn 2-4 hazards in random rooms
     const hazardCount = 2 + Math.floor(Math.random() * 3);
@@ -1773,6 +1874,11 @@ export class EchoGameEngine {
       return; // Dodged!
     }
 
+    // Gore effects on entity damage
+    if (this.goreConfig.enabled) {
+      this.damageEntityGore(entity, damage);
+    }
+
     entity.health -= damage;
     entity.hitFlashTimer = 0.3;
 
@@ -1833,6 +1939,10 @@ export class EchoGameEngine {
   damagePlayer(amount: number) {
     const p = this.player;
     p.health -= amount;
+    // Gore effects on player damage
+    if (this.goreConfig.enabled) {
+      this.damagePlayerGore(amount);
+    }
     this.totalDamageTaken += amount;
     // Screen shake / glitch effect
     this.glitchIntensity = Math.min(1, this.glitchIntensity + 0.3);
@@ -1844,6 +1954,444 @@ export class EchoGameEngine {
     if (p.health <= 0) {
       p.health = 0;
       this.playerDeath();
+    }
+  }
+
+  // ============================================================
+  // Gore System - Blood, Dismemberment, Heart Rip
+  // ============================================================
+
+  /** Spawn a blood pool at the given position */
+  spawnBloodPool(pos: Vec2, radius: number, color: string, isToxic: boolean = false) {
+    this.bloodPools.push({
+      pos: { x: pos.x + (Math.random() - 0.5) * 0.5, y: pos.y + (Math.random() - 0.5) * 0.5 },
+      radius,
+      alpha: 0.8,
+      age: 0,
+      maxAge: this.goreConfig.bloodPoolDuration,
+      color,
+      isToxic,
+    });
+  }
+
+  /** Spawn blood splashes on screen */
+  spawnBloodSplash(count: number, intensity: number) {
+    for (let i = 0; i < count; i++) {
+      this.bloodSplashs.push({
+        x: Math.random(),
+        y: Math.random(),
+        size: 5 + Math.random() * 30 * intensity,
+        alpha: 0.3 + Math.random() * 0.5 * intensity,
+        angle: Math.random() * Math.PI * 2,
+        age: 0,
+        maxAge: 3 + Math.random() * 4,
+        type: Math.random() > 0.5 ? 'spray' : Math.random() > 0.3 ? 'drip' : 'smear',
+      });
+    }
+    // Limit total splashes
+    while (this.bloodSplashs.length > this.goreConfig.bloodSplashCount) {
+      this.bloodSplashs.shift();
+    }
+  }
+
+  /** Spawn a body part on the ground */
+  spawnBodyPart(pos: Vec2, partType: BodyPart['partType'], entityType: EnemyType) {
+    const bloodColors = MONSTER_BLOOD_COLORS[entityType];
+    this.bodyParts.push({
+      pos: { x: pos.x + (Math.random() - 0.5) * 1.5, y: pos.y + (Math.random() - 0.5) * 1.5 },
+      partType,
+      rotation: Math.random() * Math.PI * 2,
+      alpha: 1.0,
+      age: 0,
+      maxAge: 120,
+      color: bloodColors.fresh,
+      isDripping: true,
+      entityType,
+    });
+  }
+
+  /** Process a gore event */
+  processGoreEvent(type: GoreEventType, pos: Vec2, entityType: EnemyType, intensity: number = 1.0) {
+    const bloodColors = MONSTER_BLOOD_COLORS[entityType];
+
+    switch (type) {
+      case 'blood_spray': {
+        // Spray blood particles - create multiple blood pools
+        const poolCount = Math.floor(2 + intensity * 4);
+        for (let i = 0; i < poolCount; i++) {
+          this.spawnBloodPool(pos, 0.3 + Math.random() * 0.5 * intensity, bloodColors.fresh, bloodColors.toxic);
+        }
+        // Screen blood
+        this.spawnBloodSplash(Math.floor(3 + intensity * 5), intensity);
+        break;
+      }
+
+      case 'dismemberment': {
+        // Create blood pools at dismemberment site
+        const poolCount = Math.floor(3 + intensity * 5);
+        for (let i = 0; i < poolCount; i++) {
+          this.spawnBloodPool(pos, 0.4 + Math.random() * 0.8 * intensity, bloodColors.fresh, bloodColors.toxic);
+        }
+        // Spawn body parts
+        const parts: BodyPart['partType'][] = ['arm', 'leg', 'rib'];
+        const part = parts[Math.floor(Math.random() * parts.length)];
+        this.spawnBodyPart(pos, part, entityType);
+        // Heavy screen blood
+        this.spawnBloodSplash(Math.floor(5 + intensity * 8), intensity);
+        // Big illumination (blood spray reflects echo)
+        this.illuminateArea(pos, 3, 0.6, bloodColors.fresh);
+        break;
+      }
+
+      case 'head_explode': {
+        // Massive blood spray
+        for (let i = 0; i < 8; i++) {
+          this.spawnBloodPool(pos, 0.5 + Math.random() * 1.0, bloodColors.fresh, bloodColors.toxic);
+        }
+        // Spawn head and eye parts
+        this.spawnBodyPart(pos, 'head', entityType);
+        this.spawnBodyPart(pos, 'eye', entityType);
+        // Extreme screen blood
+        this.spawnBloodSplash(15, 1.0);
+        // Illumination
+        this.illuminateArea(pos, 5, 0.8, bloodColors.fresh);
+        break;
+      }
+
+      case 'heart_rip': {
+        // The monster is ripping the player's heart - blood spray from player position
+        const pPos = this.player.pos;
+        for (let i = 0; i < 5; i++) {
+          this.spawnBloodPool(pPos, 0.5 + Math.random() * 0.8, '#cc0000', false);
+        }
+        // Spawn the heart on the ground
+        this.spawnBodyPart(pPos, 'heart', entityType);
+        // Heavy screen blood
+        this.spawnBloodSplash(12, 1.0);
+        // Illumination
+        this.illuminateArea(pPos, 4, 0.7, '#cc0000');
+        break;
+      }
+
+      case 'gut_spill': {
+        // Intestines and organs
+        for (let i = 0; i < 6; i++) {
+          this.spawnBloodPool(pos, 0.4 + Math.random() * 0.6, bloodColors.fresh, bloodColors.toxic);
+        }
+        this.spawnBodyPart(pos, 'organ', entityType);
+        this.spawnBodyPart(pos, 'rib', entityType);
+        this.spawnBloodSplash(8, 0.8);
+        break;
+      }
+
+      case 'decapitation': {
+        // Head separated
+        for (let i = 0; i < 5; i++) {
+          this.spawnBloodPool(pos, 0.5 + Math.random() * 0.7, bloodColors.fresh, bloodColors.toxic);
+        }
+        this.spawnBodyPart(pos, 'head', entityType);
+        this.spawnBloodSplash(10, 0.9);
+        this.illuminateArea(pos, 4, 0.6, bloodColors.fresh);
+        break;
+      }
+
+      case 'arterial_spray': {
+        // Continuous spray of blood (like a severed artery)
+        for (let i = 0; i < 10; i++) {
+          this.spawnBloodPool(pos, 0.3 + Math.random() * 0.5, bloodColors.fresh, bloodColors.toxic);
+        }
+        this.spawnBloodSplash(8, intensity);
+        break;
+      }
+
+      case 'flesh_tear': {
+        // Flesh ripped apart
+        for (let i = 0; i < 4; i++) {
+          this.spawnBloodPool(pos, 0.3 + Math.random() * 0.4, bloodColors.fresh, bloodColors.toxic);
+        }
+        this.spawnBloodSplash(5, intensity * 0.6);
+        break;
+      }
+
+      case 'bone_break':
+      case 'eye_pop': {
+        // Smaller effects
+        this.spawnBloodPool(pos, 0.2 + Math.random() * 0.3, bloodColors.fresh, bloodColors.toxic);
+        if (type === 'eye_pop') this.spawnBodyPart(pos, 'eye', entityType);
+        this.spawnBloodSplash(3, intensity * 0.4);
+        break;
+      }
+    }
+  }
+
+  /** Update the gore system each frame */
+  updateGoreSystem(dt: number) {
+    // Update blood pools
+    for (const pool of this.bloodPools) {
+      pool.age += dt;
+      pool.alpha = Math.max(0, 0.8 * (1 - pool.age / pool.maxAge));
+      // Toxic blood pools damage the player
+      if (pool.isToxic) {
+        const dist = this.dist(this.player.pos, pool.pos);
+        if (dist < pool.radius + 0.5) {
+          this.damagePlayer(this.goreConfig.toxicBloodDamage * dt);
+        }
+      }
+    }
+    this.bloodPools = this.bloodPools.filter(p => p.age < p.maxAge);
+
+    // Update blood splashes on screen
+    for (const splash of this.bloodSplashs) {
+      splash.age += dt;
+      // Drip effect - slowly move downward
+      if (splash.type === 'drip') {
+        splash.y += dt * 0.02;
+        splash.size += dt * 2;
+      }
+      splash.alpha = Math.max(0, splash.alpha * (1 - splash.age / splash.maxAge));
+    }
+    this.bloodSplashs = this.bloodSplashs.filter(s => s.age < s.maxAge);
+
+    // Update body parts
+    for (const part of this.bodyParts) {
+      part.age += dt;
+      part.alpha = Math.max(0, 1 - part.age / part.maxAge);
+      // Stop dripping after a while
+      if (part.age > 10) part.isDripping = false;
+      // Dripping body parts create small blood pools
+      if (part.isDripping && Math.random() < dt * 2) {
+        const bloodColors = MONSTER_BLOOD_COLORS[part.entityType];
+        this.spawnBloodPool(part.pos, 0.1 + Math.random() * 0.15, bloodColors.dried, bloodColors.toxic);
+      }
+    }
+    this.bodyParts = this.bodyParts.filter(p => p.age < p.maxAge);
+
+    // Process gore event queue
+    for (const event of this.goreEventQueue) {
+      const entity = event.entityId !== undefined ? this.entities.find(e => e.id === event.entityId) : null;
+      const entityType: EnemyType = entity?.type ?? 'stalker';
+      this.processGoreEvent(event.type, event.pos, entityType, event.intensity);
+    }
+    this.goreEventQueue = [];
+
+    // Update player heart-rip state
+    this.updateHeartRip(dt);
+
+    // Update entity bleeding
+    this.updateBleeding(dt);
+
+    // Player blood trail
+    if (this.player.isBleeding && this.goreConfig.bloodTrailEnabled) {
+      this.player.bloodTrailTimer -= dt;
+      if (this.player.bloodTrailTimer <= 0) {
+        this.player.bloodTrailTimer = 0.3 / this.player.bleedingIntensity;
+        this.spawnBloodPool(this.player.pos, 0.15 + this.player.bleedingIntensity * 0.2, '#cc0000', false);
+      }
+    }
+
+    // Player gore event timer
+    if (this.player.goreEventTimer > 0) {
+      this.player.goreEventTimer -= dt;
+      if (this.player.goreEventTimer <= 0) {
+        this.player.lastGoreEvent = null;
+      }
+    }
+  }
+
+  /** Update heart-rip mechanic */
+  updateHeartRip(dt: number) {
+    const p = this.player;
+    const hr = p.heartRip;
+
+    if (!this.goreConfig.heartRipEnabled) return;
+
+    if (hr.isBeingRipped) {
+      // Progress the heart rip
+      hr.ripProgress += dt * 0.5; // Takes 2 seconds to fully rip
+      hr.bloodSprayIntensity = hr.ripProgress;
+
+      // Intense screen effects during rip
+      this.damageFlashAlpha = Math.max(this.damageFlashAlpha, hr.ripProgress * 0.3);
+      this.glitchIntensity = Math.max(this.glitchIntensity, hr.ripProgress * 0.5);
+
+      // Screen shake
+      this.shakeX = (Math.random() - 0.5) * hr.ripProgress * 15;
+      this.shakeY = (Math.random() - 0.5) * hr.ripProgress * 15;
+      this.shakeDecay = 500;
+
+      // Continuous blood spray during rip
+      if (Math.random() < dt * 5 * hr.ripProgress) {
+        this.spawnBloodPool(p.pos, 0.2 + Math.random() * 0.3, '#cc0000', false);
+      }
+      this.spawnBloodSplash(Math.floor(hr.ripProgress * 2), hr.ripProgress);
+
+      // Heart is visible at 60% progress
+      if (hr.ripProgress > 0.6 && !hr.heartVisible) {
+        hr.heartVisible = true;
+        this.processGoreEvent('heart_rip', p.pos, 'devourer', 1.0);
+      }
+
+      // Death at 100%
+      if (hr.ripProgress >= 1.0) {
+        hr.isBeingRipped = false;
+        this.playerDeathType = 'heartRip';
+        this.playerDeathMessage = GORY_DEATH_MESSAGES.heartRip[Math.floor(Math.random() * GORY_DEATH_MESSAGES.heartRip.length)];
+        this.playerDeath();
+        return;
+      }
+    }
+  }
+
+  /** Attempt to start a heart-rip attack (called by Devourer and Broodmother) */
+  attemptHeartRip(entityId: number) {
+    const p = this.player;
+    if (!this.goreConfig.heartRipEnabled || p.heartRip.isBeingRipped) return;
+
+    const entity = this.entities.find(e => e.id === entityId);
+    if (!entity || entity.state === 'dead') return;
+
+    const dist = this.dist(entity.pos, p.pos);
+    if (dist > 1.5) return;
+
+    // 30% chance to attempt heart rip on close contact
+    if (Math.random() < 0.3) {
+      p.heartRip.isBeingRipped = true;
+      p.heartRip.ripProgress = 0;
+      p.heartRip.ripperEntityId = entityId;
+      p.heartRip.heartVisible = false;
+      p.heartRip.lastRipAttempt = performance.now();
+      p.heartRip.bloodSprayIntensity = 0;
+
+      // Player can try to escape by moving rapidly
+      p.paralyzed = true;
+      p.paralyzeTimer = 2.0; // 2 seconds of being held
+
+      // Big screen effect
+      this.damageFlashAlpha = 0.5;
+      this.glitchIntensity = 0.3;
+    }
+  }
+
+  /** Update entity bleeding effects */
+  updateBleeding(dt: number) {
+    for (const entity of this.entities) {
+      if (entity.state === 'dead') continue;
+
+      // Gore event timer
+      if (entity.goreEventTimer > 0) {
+        entity.goreEventTimer -= dt;
+        if (entity.goreEventTimer <= 0) {
+          entity.lastGoreEvent = null;
+        }
+      }
+
+      // Bleeding entities leave blood trail
+      if (entity.isBleeding && this.goreConfig.bloodTrailEnabled) {
+        entity.bloodTrailTimer -= dt;
+        if (entity.bloodTrailTimer <= 0) {
+          entity.bloodTrailTimer = 0.5 / Math.max(0.1, entity.bleedingIntensity);
+          const bloodColors = MONSTER_BLOOD_COLORS[entity.type];
+          this.spawnBloodPool(entity.pos, 0.15 + entity.bleedingIntensity * 0.3, bloodColors.fresh, bloodColors.toxic);
+        }
+      }
+
+      // Slowly reduce bleeding over time
+      if (entity.isBleeding) {
+        entity.bleedingIntensity = Math.max(0, entity.bleedingIntensity - dt * 0.05);
+        if (entity.bleedingIntensity <= 0) {
+          entity.isBleeding = false;
+        }
+      }
+    }
+  }
+
+  /** Override damageEntity to add gore effects */
+  damageEntityGore(entity: Entity, damage: number) {
+    // Entity starts bleeding when hit
+    entity.isBleeding = true;
+    entity.bleedingIntensity = Math.min(1, entity.bleedingIntensity + damage / entity.maxHealth);
+
+    // Blood spray on hit
+    const healthPercent = entity.health / entity.maxHealth;
+    if (damage > 15) {
+      this.goreEventQueue.push({
+        type: 'blood_spray',
+        pos: { ...entity.pos },
+        entityId: entity.id,
+        intensity: Math.min(1, damage / 50),
+      });
+    }
+
+    // Critical hit - chance for dismemberment
+    if (damage > 30 && healthPercent < 0.3 && this.goreConfig.dismembermentEnabled) {
+      if (Math.random() < 0.4) {
+        // Random dismemberment
+        const parts: (keyof DismembermentInfo)[] = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
+        const availableParts = parts.filter(p => !entity.dismemberment[p]);
+        if (availableParts.length > 0) {
+          const part = availableParts[Math.floor(Math.random() * availableParts.length)];
+          entity.dismemberment[part] = true;
+          entity.lastGoreEvent = 'dismemberment';
+          entity.goreEventTimer = 1.0;
+
+          // Spawn the corresponding body part
+          const partName = part === 'leftArm' || part === 'rightArm' ? 'arm' : 'leg';
+          this.spawnBodyPart(entity.pos, partName, entity.type);
+
+          this.goreEventQueue.push({
+            type: 'dismemberment',
+            pos: { ...entity.pos },
+            entityId: entity.id,
+            intensity: 1.0,
+          });
+        }
+      }
+    }
+
+    // Head explode on massive damage to low-health enemy
+    if (damage > 50 && healthPercent < 0.15 && !entity.dismemberment.head) {
+      entity.dismemberment.head = true;
+      entity.headless = true;
+      entity.lastGoreEvent = 'head_explode';
+      entity.goreEventTimer = 1.5;
+      this.goreEventQueue.push({
+        type: 'head_explode',
+        pos: { ...entity.pos },
+        entityId: entity.id,
+        intensity: 1.0,
+      });
+    }
+
+    // Gut spill on high damage
+    if (damage > 25 && healthPercent < 0.4 && !entity.gutSpilled && Math.random() < 0.25) {
+      entity.gutSpilled = true;
+      entity.dismemberment.torso = true;
+      entity.lastGoreEvent = 'gut_spill';
+      entity.goreEventTimer = 1.0;
+      this.goreEventQueue.push({
+        type: 'gut_spill',
+        pos: { ...entity.pos },
+        entityId: entity.id,
+        intensity: 0.8,
+      });
+    }
+  }
+
+  /** Override damagePlayer to add gore effects to the player */
+  damagePlayerGore(amount: number) {
+    const p = this.player;
+    p.isBleeding = true;
+    p.bleedingIntensity = Math.min(1, p.bleedingIntensity + amount / p.maxHealth);
+
+    // Blood splashes on screen when player takes damage
+    const intensity = Math.min(1, amount / 30);
+    this.spawnBloodSplash(Math.floor(2 + intensity * 6), intensity);
+
+    // Heavy damage - gore event
+    if (amount > 20) {
+      p.lastGoreEvent = 'blood_spray';
+      p.goreEventTimer = 0.5;
+      this.spawnBloodPool(p.pos, 0.3 + Math.random() * 0.4, '#cc0000', false);
     }
   }
 
@@ -1954,6 +2502,7 @@ export class EchoGameEngine {
     this.cleanIllumination();
     this.updateDanger();
     this.updateAnimations(dt);
+    this.updateGoreSystem(dt);
     this.handleItemPickup();
     this.checkWinCondition();
 
@@ -2087,6 +2636,19 @@ export class EchoGameEngine {
     if (p.paralyzeTimer > 0) {
       p.paralyzeTimer -= dt;
       if (p.paralyzeTimer <= 0) p.paralyzed = false;
+    }
+
+    // Heart rip escape - moving rapidly can break free
+    if (p.heartRip.isBeingRipped && p.isMoving) {
+      p.heartRip.ripProgress -= dt * 0.3; // Moving slows the rip
+      if (p.heartRip.ripProgress <= 0) {
+        p.heartRip.isBeingRipped = false;
+        p.heartRip.ripProgress = 0;
+        p.heartRip.heartVisible = false;
+        p.heartRip.bloodSprayIntensity = 0;
+        p.paralyzed = false;
+        p.paralyzeTimer = 0;
+      }
     }
 
     // Attack animation
@@ -3038,6 +3600,11 @@ export class EchoGameEngine {
           entity.stateTimer = Math.max(entity.stateTimer, 12);
         }
 
+        // Attempt heart rip when very close
+        if (playerDist < 1.5 && this.goreConfig.heartRipEnabled) {
+          this.attemptHeartRip(entity.id);
+        }
+
         if (entity.stateTimer <= 0) {
           entity.state = 'investigate';
           entity.lastHeardSound = { ...this.player.pos };
@@ -3640,6 +4207,11 @@ export class EchoGameEngine {
           entity.stateTimer = Math.max(entity.stateTimer, 10);
         }
 
+        // Attempt heart rip when very close
+        if (playerDist < 1.5 && this.goreConfig.heartRipEnabled) {
+          this.attemptHeartRip(entity.id);
+        }
+
         if (entity.stateTimer <= 0) {
           entity.state = 'investigate';
           entity.lastHeardSound = { ...this.player.pos };
@@ -4175,6 +4747,15 @@ export class EchoGameEngine {
   }
 
   playerDeath() {
+    // Set death message if not already set
+    if (!this.playerDeathMessage) {
+      const msgs = GORY_DEATH_MESSAGES[this.playerDeathType] || GORY_DEATH_MESSAGES.generic;
+      this.playerDeathMessage = msgs[Math.floor(Math.random() * msgs.length)];
+    }
+    // Massive blood pool at death
+    this.spawnBloodPool(this.player.pos, 1.0 + Math.random() * 0.5, '#8b0000', false);
+    this.spawnBloodSplash(10, 1.0);
+
     if (this.hardcoreMode) {
       // Hardcore: permanent death, no retry
       this.state = 'permanentDeath';
@@ -4382,6 +4963,12 @@ export class EchoGameEngine {
       this.renderEntities(ctx, w, h);
       this.renderEntityEffects(ctx, w, h);
 
+      // Gore rendering
+      if (this.goreConfig.enabled) {
+        this.renderGoreFloor(ctx, w, h);
+        this.renderBodyParts(ctx, w, h);
+      }
+
       // Co-op Body: render ping markers as directional arrows
       if (this.coopEnabled && this.coopRole === 'body') {
         this.renderPingArrows(ctx, w, h);
@@ -4406,6 +4993,11 @@ export class EchoGameEngine {
 
     // Post-processing effects (after main view, before HUD)
     this.renderPostProcessing(ctx, w, h);
+
+    // Blood overlay on screen
+    if (this.goreConfig.enabled) {
+      this.renderBloodOverlay(ctx, w, h);
+    }
 
     // Minimap
     this.renderMinimap(ctx, w, h);
@@ -6658,6 +7250,398 @@ export class EchoGameEngine {
         const y = Math.random() * h;
         const thickness = 1 + Math.random() * 2;
         ctx.fillRect(w - Math.random() * 15 * aberrationStrength, y, Math.random() * 15 * aberrationStrength, thickness);
+      }
+    }
+  }
+
+  // ---- Gore rendering ----
+
+  /** Render blood pools on the floor (top-down view in the minimap area, and as floor stains in 3D view) */
+  private renderGoreFloor(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const p = this.player;
+
+    // Render blood pools that are within render distance
+    for (const pool of this.bloodPools) {
+      const dist = this.dist(p.pos, pool.pos);
+      if (dist > this.advanced.renderDistance) continue;
+
+      // Calculate screen position using raycasting
+      const dx = pool.pos.x - p.pos.x;
+      const dy = pool.pos.y - p.pos.y;
+
+      // Transform to camera space
+      const dirX = Math.cos(p.dir);
+      const dirY = Math.sin(p.dir);
+      const planeX = -Math.sin(p.dir);
+      const planeY = Math.cos(p.dir);
+
+      const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+      const transformX = invDet * (dirY * dx - dirX * dy);
+      const transformY = invDet * (-planeY * dx + planeX * dy);
+
+      if (transformY <= 0.1) continue;
+
+      const spriteScreenX = Math.floor((w / 2) * (1 + transformX / transformY));
+      const spriteHeight = Math.abs(Math.floor(h / transformY)) * pool.radius * 0.8;
+
+      const drawX = spriteScreenX;
+      const drawY = Math.floor(h / 2) + h * 0.2 / transformY; // Below center = floor
+
+      const alpha = pool.alpha * Math.max(0.1, 1 - dist / this.advanced.renderDistance);
+      if (alpha < 0.01) continue;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = pool.color;
+      ctx.shadowColor = pool.color;
+      ctx.shadowBlur = 5;
+
+      // Draw as an elliptical blood pool on the floor
+      ctx.beginPath();
+      ctx.ellipse(drawX, drawY, spriteHeight * 0.5, spriteHeight * 0.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner darker pool
+      ctx.fillStyle = pool.color;
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.beginPath();
+      ctx.ellipse(drawX, drawY, spriteHeight * 0.3, spriteHeight * 0.1, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  /** Render body parts on the ground */
+  private renderBodyParts(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    if (!this.goreConfig.bodyPartsEnabled) return;
+
+    const p = this.player;
+
+    for (const part of this.bodyParts) {
+      const dist = this.dist(p.pos, part.pos);
+      if (dist > this.advanced.renderDistance) continue;
+
+      const dx = part.pos.x - p.pos.x;
+      const dy = part.pos.y - p.pos.y;
+
+      const dirX = Math.cos(p.dir);
+      const dirY = Math.sin(p.dir);
+      const planeX = -Math.sin(p.dir);
+      const planeY = Math.cos(p.dir);
+
+      const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+      const transformX = invDet * (dirY * dx - dirX * dy);
+      const transformY = invDet * (-planeY * dx + planeX * dy);
+
+      if (transformY <= 0.1) continue;
+
+      const spriteScreenX = Math.floor((w / 2) * (1 + transformX / transformY));
+      const spriteSize = Math.abs(Math.floor(h / transformY)) * 0.15;
+
+      const alpha = part.alpha * Math.max(0.1, 1 - dist / this.advanced.renderDistance);
+      if (alpha < 0.01) continue;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(spriteScreenX, Math.floor(h / 2) + h * 0.15 / transformY);
+      ctx.rotate(part.rotation);
+
+      // Draw different body part shapes
+      ctx.fillStyle = part.color;
+      ctx.shadowColor = part.color;
+      ctx.shadowBlur = 3;
+
+      switch (part.partType) {
+        case 'arm':
+          // Long thin shape
+          ctx.fillRect(-spriteSize * 0.5, -spriteSize * 0.1, spriteSize, spriteSize * 0.2);
+          // Hand
+          ctx.beginPath();
+          ctx.arc(spriteSize * 0.5, 0, spriteSize * 0.12, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        case 'leg':
+          // Thicker long shape
+          ctx.fillRect(-spriteSize * 0.4, -spriteSize * 0.12, spriteSize * 0.8, spriteSize * 0.24);
+          // Foot
+          ctx.fillRect(spriteSize * 0.3, -spriteSize * 0.15, spriteSize * 0.25, spriteSize * 0.3);
+          break;
+        case 'head':
+          // Circular shape with eye sockets
+          ctx.beginPath();
+          ctx.arc(0, 0, spriteSize * 0.25, 0, Math.PI * 2);
+          ctx.fill();
+          // Eye sockets (dark)
+          ctx.fillStyle = '#000';
+          ctx.beginPath();
+          ctx.arc(-spriteSize * 0.08, -spriteSize * 0.05, spriteSize * 0.05, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(spriteSize * 0.08, -spriteSize * 0.05, spriteSize * 0.05, 0, Math.PI * 2);
+          ctx.fill();
+          // Mouth
+          ctx.beginPath();
+          ctx.arc(0, spriteSize * 0.08, spriteSize * 0.08, 0, Math.PI);
+          ctx.fill();
+          break;
+        case 'heart':
+          // Heart shape (pulsating)
+          {
+            const heartPulse = 1 + Math.sin(performance.now() * 0.008) * 0.1;
+            const hs = spriteSize * 0.2 * heartPulse;
+            ctx.fillStyle = '#cc0000';
+            ctx.shadowColor = '#ff0000';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.moveTo(0, hs * 0.3);
+            ctx.bezierCurveTo(-hs * 0.5, -hs * 0.3, -hs, hs * 0.1, 0, hs);
+            ctx.bezierCurveTo(hs, hs * 0.1, hs * 0.5, -hs * 0.3, 0, hs * 0.3);
+            ctx.fill();
+            // Arteries
+            ctx.strokeStyle = '#880000';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, -hs * 0.1);
+            ctx.lineTo(-hs * 0.1, -hs * 0.4);
+            ctx.moveTo(0, -hs * 0.1);
+            ctx.lineTo(hs * 0.1, -hs * 0.4);
+            ctx.stroke();
+          }
+          break;
+        case 'organ':
+          // Irregular blob (intestines)
+          ctx.beginPath();
+          ctx.ellipse(0, 0, spriteSize * 0.3, spriteSize * 0.12, part.rotation, 0, Math.PI * 2);
+          ctx.fill();
+          // Coiled shape
+          ctx.strokeStyle = part.color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          for (let t = 0; t < Math.PI * 4; t += 0.2) {
+            const ix = Math.cos(t) * spriteSize * 0.2 * (1 + Math.sin(t * 3) * 0.1);
+            const iy = Math.sin(t) * spriteSize * 0.06;
+            if (t === 0) ctx.moveTo(ix, iy);
+            else ctx.lineTo(ix, iy);
+          }
+          ctx.stroke();
+          break;
+        case 'rib':
+          // Rib cage piece
+          ctx.strokeStyle = '#d4c4a8';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, spriteSize * 0.2, -Math.PI * 0.3, Math.PI * 0.3);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(0, spriteSize * 0.05, spriteSize * 0.18, -Math.PI * 0.25, Math.PI * 0.25);
+          ctx.stroke();
+          break;
+        case 'eye':
+          // Eyeball
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(0, 0, spriteSize * 0.1, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = part.color;
+          ctx.beginPath();
+          ctx.arc(0, 0, spriteSize * 0.05, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath();
+          ctx.arc(0, 0, spriteSize * 0.02, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        case 'tentacle':
+          // Tentacle (for broodmother)
+          ctx.strokeStyle = part.color;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(-spriteSize * 0.3, 0);
+          for (let t = 0; t < 6; t++) {
+            ctx.lineTo(
+              -spriteSize * 0.3 + t * spriteSize * 0.1,
+              Math.sin(t + part.rotation) * spriteSize * 0.1
+            );
+          }
+          ctx.stroke();
+          break;
+        case 'torso':
+          // Large torso piece
+          ctx.fillRect(-spriteSize * 0.3, -spriteSize * 0.2, spriteSize * 0.6, spriteSize * 0.4);
+          // Exposed ribs
+          ctx.strokeStyle = '#d4c4a8';
+          ctx.lineWidth = 1;
+          for (let i = 0; i < 4; i++) {
+            const ry = -spriteSize * 0.12 + i * spriteSize * 0.07;
+            ctx.beginPath();
+            ctx.arc(0, ry, spriteSize * 0.15, -Math.PI * 0.3, Math.PI * 0.3);
+            ctx.stroke();
+          }
+          break;
+      }
+
+      // Blood drip from body part
+      if (part.isDripping) {
+        ctx.fillStyle = part.color;
+        ctx.globalAlpha = alpha * 0.6;
+        const dripY = (performance.now() * 0.001 % 1) * spriteSize * 0.5;
+        ctx.beginPath();
+        ctx.ellipse(spriteSize * 0.1 * Math.sin(part.rotation), dripY, spriteSize * 0.03, spriteSize * 0.05, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+  }
+
+  /** Render blood splashes on screen (HUD overlay) */
+  private renderBloodOverlay(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    for (const splash of this.bloodSplashs) {
+      if (splash.alpha < 0.01) continue;
+
+      const sx = splash.x * w;
+      const sy = splash.y * h;
+      const size = splash.size;
+
+      ctx.save();
+      ctx.globalAlpha = splash.alpha;
+      ctx.translate(sx, sy);
+      ctx.rotate(splash.angle);
+
+      switch (splash.type) {
+        case 'spray': {
+          // Splatter spray
+          ctx.fillStyle = '#8b0000';
+          ctx.beginPath();
+          ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+          // Smaller droplets around
+          for (let i = 0; i < 4; i++) {
+            const angle = (i / 4) * Math.PI * 2 + splash.angle;
+            const dist = size * 0.6;
+            ctx.beginPath();
+            ctx.arc(Math.cos(angle) * dist, Math.sin(angle) * dist, size * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          break;
+        }
+        case 'drip': {
+          // Blood drip running down screen
+          ctx.fillStyle = '#990000';
+          ctx.fillRect(-size * 0.1, -size * 0.3, size * 0.2, size);
+          // Drip bulge at bottom
+          ctx.beginPath();
+          ctx.arc(0, size * 0.7, size * 0.15, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+        case 'smear': {
+          // Blood smear
+          ctx.fillStyle = '#660000';
+          ctx.fillRect(-size * 0.5, -size * 0.1, size, size * 0.2);
+          break;
+        }
+        case 'handprint': {
+          // Bloody handprint
+          ctx.fillStyle = '#880000';
+          // Palm
+          ctx.beginPath();
+          ctx.ellipse(0, 0, size * 0.3, size * 0.25, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Fingers
+          for (let f = 0; f < 5; f++) {
+            const fAngle = -0.5 + f * 0.25;
+            ctx.fillRect(
+              Math.cos(fAngle) * size * 0.2 - size * 0.04,
+              Math.sin(fAngle) * size * 0.2 - size * 0.3,
+              size * 0.08,
+              size * 0.35
+            );
+          }
+          break;
+        }
+      }
+
+      ctx.restore();
+    }
+
+    // Heart-rip specific overlay
+    if (this.player.heartRip.isBeingRipped) {
+      const hr = this.player.heartRip;
+      const now = performance.now();
+
+      // Intense red vignette
+      const vignetteAlpha = 0.3 + hr.ripProgress * 0.4;
+      const grad = ctx.createRadialGradient(w / 2, h / 2, w * 0.1, w / 2, h / 2, w * 0.6);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(0.5, `rgba(139,0,0,${vignetteAlpha * 0.5})`);
+      grad.addColorStop(1, `rgba(139,0,0,${vignetteAlpha})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Heartbeat overlay - pulsing red
+      const heartbeatAlpha = Math.abs(Math.sin(now * 0.008)) * hr.ripProgress * 0.3;
+      ctx.fillStyle = `rgba(255,0,0,${heartbeatAlpha})`;
+      ctx.fillRect(0, 0, w, h);
+
+      // "TE ESTÁN ARRANCANDO EL CORAZÓN" text
+      if (hr.ripProgress > 0.3) {
+        ctx.save();
+        ctx.font = `bold ${Math.floor(14 + hr.ripProgress * 10)}px monospace`;
+        ctx.fillStyle = `rgba(255,0,0,${0.5 + Math.sin(now * 0.01) * 0.3})`;
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 15;
+        ctx.fillText('¡TE ARRANCAN EL CORAZÓN!', w / 2, h * 0.3);
+        ctx.restore();
+      }
+
+      // Heart visible - show it being pulled out
+      if (hr.heartVisible) {
+        ctx.save();
+        const heartX = w / 2 + Math.sin(now * 0.005) * 20;
+        const heartY = h * 0.45 + Math.cos(now * 0.004) * 10;
+        const heartSize = 15 + hr.ripProgress * 20;
+
+        // Pulsating heart
+        const pulse = 1 + Math.sin(now * 0.01) * 0.2;
+        const hs = heartSize * pulse;
+
+        ctx.fillStyle = '#cc0000';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.moveTo(heartX, heartY + hs * 0.3);
+        ctx.bezierCurveTo(heartX - hs * 0.5, heartY - hs * 0.3, heartX - hs, heartY + hs * 0.1, heartX, heartY + hs);
+        ctx.bezierCurveTo(heartX + hs, heartY + hs * 0.1, heartX + hs * 0.5, heartY - hs * 0.3, heartX, heartY + hs * 0.3);
+        ctx.fill();
+
+        // Arteries trailing
+        ctx.strokeStyle = '#880000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(heartX, heartY);
+        ctx.lineTo(heartX - 5, heartY - hs * 0.5 - Math.sin(now * 0.003) * 5);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
+    // Player bleeding overlay - dripping blood from edges
+    if (this.player.isBleeding && this.player.bleedingIntensity > 0.2) {
+      const now = performance.now();
+      const dripCount = Math.floor(this.player.bleedingIntensity * 8);
+      ctx.fillStyle = `rgba(139,0,0,${this.player.bleedingIntensity * 0.3})`;
+      for (let i = 0; i < dripCount; i++) {
+        const phase = (now * 0.001 + i * 0.37) % 1;
+        const x = ((now * 0.0001 * (i + 1)) % 1) * w;
+        const y = phase * h;
+        const dripSize = 2 + this.player.bleedingIntensity * 5;
+        ctx.beginPath();
+        ctx.ellipse(x, y, dripSize * 0.3, dripSize * 0.8, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
   }

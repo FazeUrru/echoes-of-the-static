@@ -119,7 +119,7 @@ export default function EchoGame() {
   const [joystickPos, setJoystickPos] = useState({ dx: 0, dy: 0, active: false });
 
   // ---- Engine live state (polling for zone warnings etc) ----
-  const [engineLiveState, setEngineLiveState] = useState({ isInSilentZone: false, isInWhiteNoiseZone: false, micEnabled: false, hardcoreMode: false, sonarMode: 'active' as 'active' | 'passive', coopRole: 'none' as import('@/game/types').CoopRole, pingCount: 0, currentChapter: 1, totalPoints: 0, unlockedCharCount: 0, engineDifficulty: 'medium' as Difficulty, engineHardcore: false, playTimeSecs: 0, equippedWeapon: null as string | null, weaponAmmo: 0, playerHealth: 100, playerMaxHealth: 100, attackCooldown: 0, isWebbed: false, isParalyzed: false, killCount: 0, totalDamageDealt: 0, totalDamageTaken: 0, enemiesRemaining: 0, nearbyHazard: null as 'toxic' | 'electric' | 'collapsing' | null });
+  const [engineLiveState, setEngineLiveState] = useState({ isInSilentZone: false, isInWhiteNoiseZone: false, micEnabled: false, hardcoreMode: false, sonarMode: 'active' as 'active' | 'passive', coopRole: 'none' as import('@/game/types').CoopRole, pingCount: 0, currentChapter: 1, totalPoints: 0, unlockedCharCount: 0, engineDifficulty: 'medium' as Difficulty, engineHardcore: false, playTimeSecs: 0, equippedWeapon: null as string | null, weaponAmmo: 0, playerHealth: 100, playerMaxHealth: 100, attackCooldown: 0, isWebbed: false, isParalyzed: false, killCount: 0, totalDamageDealt: 0, totalDamageTaken: 0, enemiesRemaining: 0, nearbyHazard: null as 'toxic' | 'electric' | 'collapsing' | null, heartRipping: false, heartRipProgress: 0, playerBleeding: false, bleedingIntensity: 0, deathMessage: '', bloodPoolCount: 0, bodyPartCount: 0 });
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -151,6 +151,13 @@ export default function EchoGame() {
           totalDamageTaken: eng.totalDamageTaken,
           enemiesRemaining: eng.entities.filter((e: any) => e.state !== 'dead').length,
           nearbyHazard: eng.hazards.some((h: any) => eng.dist(eng.player.pos, h.pos) < h.radius) ? eng.hazards.find((h: any) => eng.dist(eng.player.pos, h.pos) < h.radius)?.type : null,
+          heartRipping: eng.player.heartRip?.isBeingRipped || false,
+          heartRipProgress: eng.player.heartRip?.ripProgress || 0,
+          playerBleeding: eng.player.isBleeding || false,
+          bleedingIntensity: eng.player.bleedingIntensity || 0,
+          deathMessage: eng.playerDeathMessage || '',
+          bloodPoolCount: eng.bloodPools?.length || 0,
+          bodyPartCount: eng.bodyParts?.length || 0,
         });
       }
     }, 200);
@@ -691,6 +698,22 @@ export default function EchoGame() {
             </div>
           )}
 
+          {/* Heart-rip warning */}
+          {engineLiveState.heartRipping && (
+            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 z-30 font-mono text-sm sm:text-xl tracking-widest animate-pulse"
+              style={{ color: '#ff0000', textShadow: '0 0 20px rgba(255,0,0,0.8), 0 0 40px rgba(139,0,0,0.5)' }}>
+              ❤️‍🔥 ¡ARRANCANDO TU CORAZÓN! {Math.floor(engineLiveState.heartRipProgress * 100)}%
+            </div>
+          )}
+
+          {/* Player bleeding indicator */}
+          {engineLiveState.playerBleeding && !engineLiveState.heartRipping && (
+            <div className="absolute top-14 sm:top-20 left-1/2 -translate-x-1/2 z-20 font-mono text-[10px] sm:text-xs tracking-widest"
+              style={{ color: `rgba(139,0,0,${0.4 + engineLiveState.bleedingIntensity * 0.6})`, textShadow: '0 0 8px rgba(139,0,0,0.5)' }}>
+              🩸 SANGRANDO {engineLiveState.bleedingIntensity > 0.5 ? '!!' : engineLiveState.bleedingIntensity > 0.3 ? '!' : ''}
+            </div>
+          )}
+
           {/* Crosshair for desktop */}
           {!isMobile && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
@@ -718,6 +741,8 @@ export default function EchoGame() {
           <div>⚔️ {engineLiveState.totalDamageDealt} dmg dealt</div>
           <div style={{ color: engineLiveState.totalDamageTaken > 50 ? '#ff1744' : '#888' }}>🩸 {engineLiveState.totalDamageTaken} dmg taken</div>
           <div style={{ color: '#ffd600' }}>👹 {engineLiveState.enemiesRemaining} remaining</div>
+          {engineLiveState.bloodPoolCount > 0 && <div style={{ color: '#8b0000' }}>🩸 {engineLiveState.bloodPoolCount} sangre</div>}
+          {engineLiveState.bodyPartCount > 0 && <div style={{ color: '#660000' }}>💀 {engineLiveState.bodyPartCount} restos</div>}
         </div>
       )}
 
@@ -952,6 +977,7 @@ export default function EchoGame() {
                 <p>F: Atacar con arma equipada | R: Cambiar Sonar</p>
                 <p>E: Interactuar | 1-4: Inventario | Q: Usar | G: Soltar</p>
                 <p>⚔️ 10 armas | 👹 8 monstruos | 💀 ¡Que te persiguen!</p>
+                <p>🩸 Sangre real | ❤️‍🔥 Arrancan corazones | 💀 Desmembramiento</p>
               </div>
               <div className="mt-3 font-mono text-[9px] sm:text-[10px] opacity-20" style={{ color: '#0097a7' }}>🎧 Auriculares recomendados</div>
               <div className="mt-2 font-mono text-[8px] sm:text-[9px] opacity-15" style={{ color: '#ffd700' }}>🏆 Complétalo rápido para desbloquear personajes exclusivos</div>
@@ -1373,14 +1399,29 @@ export default function EchoGame() {
       {/* ===== DEATH SCREEN ===== */}
       {gameState === 'dead' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(20,0,0,0.9) 0%, rgba(0,0,0,0.98) 70%, rgba(0,0,0,1) 100%)' }}>
-          <h1 className="text-2xl sm:text-4xl md:text-6xl font-mono font-bold tracking-widest mb-3 sm:mb-4 animate-pulse"
-            style={{ color: '#ff1744', textShadow: '0 0 30px rgba(255,23,68,0.6), 0 0 60px rgba(255,0,0,0.3)' }}>
+          style={{ background: 'radial-gradient(ellipse at center, rgba(30,0,0,0.92) 0%, rgba(10,0,0,0.98) 50%, rgba(0,0,0,1) 100%)' }}>
+          {/* Blood drip effects at top */}
+          <div className="absolute top-0 left-0 right-0 h-12 pointer-events-none" style={{ background: 'linear-gradient(to bottom, rgba(139,0,0,0.4), transparent)' }} />
+          
+          <h1 className="text-2xl sm:text-4xl md:text-6xl font-mono font-bold tracking-widest mb-2 sm:mb-3 animate-pulse"
+            style={{ color: '#ff1744', textShadow: '0 0 30px rgba(255,23,68,0.6), 0 0 60px rgba(255,0,0,0.3), 0 0 90px rgba(139,0,0,0.2)' }}>
             HAS MUERTO
           </h1>
+          
+          {/* Gory death message */}
+          {engineLiveState.deathMessage && (
+            <div className="max-w-sm sm:max-w-md px-4 mb-4 sm:mb-6 text-center">
+              <p className="font-mono text-xs sm:text-sm italic leading-relaxed"
+                style={{ color: 'rgba(200,0,0,0.7)', textShadow: '0 0 8px rgba(139,0,0,0.3)' }}>
+                &ldquo;{engineLiveState.deathMessage}&rdquo;
+              </p>
+            </div>
+          )}
+          
           <div className="font-mono text-[10px] sm:text-xs mb-6 sm:mb-8 text-center space-y-1" style={{ color: 'rgba(255,23,68,0.5)' }}>
             <p>Capitulo: {CHAPTERS[(engineLiveState.currentChapter || selectedChapter) - 1]?.name || '???'}</p>
             <p>Tiempo sobrevivido: {Math.floor(engineLiveState.playTimeSecs / 60)}m {engineLiveState.playTimeSecs % 60}s</p>
+            <p>🩸 Charcos de sangre: {engineLiveState.bloodPoolCount} | 💀 Restos: {engineLiveState.bodyPartCount}</p>
           </div>
           <div className="flex flex-col gap-2 sm:gap-3 w-full max-w-xs px-4">
             <NeonButton onClick={() => { engineRef.current?.restartChapter(); }}>REINTENTAR</NeonButton>

@@ -203,6 +203,13 @@ export interface Player {
   webTimer: number;
   paralyzed: boolean;  // paralyzed by whisperer
   paralyzeTimer: number;
+  // Gore system
+  heartRip: HeartRipState;
+  isBleeding: boolean;
+  bleedingIntensity: number;
+  bloodTrailTimer: number;
+  lastGoreEvent: string | null;
+  goreEventTimer: number;
 }
 
 // ---- Entity ----
@@ -248,6 +255,15 @@ export interface Entity {
   // Broodmother-specific
   spawnTimer: number;
   parasiteIds: number[];
+  // Gore system
+  dismemberment: DismembermentInfo;
+  bloodTrailTimer: number;          // timer for leaving blood trail when wounded
+  isBleeding: boolean;              // currently bleeding from wounds
+  bleedingIntensity: number;        // 0-1 how badly bleeding
+  lastGoreEvent: GoreEventType | null;
+  goreEventTimer: number;           // timer for gore event visual effects
+  headless: boolean;                // for rendering - no head sprite
+  gutSpilled: boolean;              // intestines hanging out
 }
 
 // ---- Chapters ----
@@ -614,6 +630,149 @@ export interface CustomLevel {
     globalReflection: number; // 0-1
   };
 }
+
+// ---- Gore / Blood System ----
+export interface BloodPool {
+  pos: Vec2;
+  radius: number;        // size of the pool
+  alpha: number;         // current opacity (fades over time)
+  age: number;           // seconds since creation
+  maxAge: number;        // seconds until fully faded (60s)
+  color: string;         // blood color (dark red, bright red, etc.)
+  isToxic: boolean;      // abomination blood is toxic - damages player
+}
+
+export interface BloodSplash {
+  x: number;            // screen x position (0-1 normalized)
+  y: number;            // screen y position (0-1 normalized)
+  size: number;         // size of the splash
+  alpha: number;        // current opacity
+  angle: number;        // rotation angle
+  age: number;          // seconds since creation
+  maxAge: number;       // seconds until fully faded
+  type: 'drip' | 'spray' | 'smear' | 'handprint';
+}
+
+export interface BodyPart {
+  pos: Vec2;
+  partType: 'arm' | 'leg' | 'head' | 'torso' | 'organ' | 'heart' | 'eye' | 'tentacle' | 'rib';
+  rotation: number;     // rotation angle
+  alpha: number;        // opacity
+  age: number;          // seconds since creation
+  maxAge: number;       // seconds until fully faded (120s)
+  color: string;        // color based on monster type
+  isDripping: boolean;  // still dripping blood
+  entityType: EnemyType; // which monster this came from
+}
+
+export interface DismembermentInfo {
+  leftArm: boolean;
+  rightArm: boolean;
+  leftLeg: boolean;
+  rightLeg: boolean;
+  head: boolean;
+  torso: boolean;
+  heart: boolean;        // heart can be ripped out by special attack
+}
+
+export interface HeartRipState {
+  isBeingRipped: boolean;       // monster is currently ripping the player's heart
+  ripProgress: number;          // 0 to 1 (1 = fully ripped = death)
+  ripperEntityId: number;       // which entity is ripping
+  heartVisible: boolean;        // heart has been extracted and is visible
+  heartPos: Vec2 | null;        // position of the ripped heart on the ground
+  lastRipAttempt: number;       // timestamp
+  bloodSprayIntensity: number;  // 0-1 how intense the blood spray is
+}
+
+export interface GoreConfig {
+  enabled: boolean;
+  bloodPoolDuration: number;    // seconds blood pools last
+  bloodSplashCount: number;     // max blood splashes on screen
+  dismembermentEnabled: boolean;
+  heartRipEnabled: boolean;
+  bloodTrailEnabled: boolean;
+  bodyPartsEnabled: boolean;
+  toxicBloodDamage: number;     // damage per second from toxic blood pools
+  bloodDripInterval: number;    // seconds between blood drips from body parts
+}
+
+export type GoreEventType = 'blood_spray' | 'dismemberment' | 'head_explode' | 'heart_rip' | 'gut_spill' | 'eye_pop' | 'bone_break' | 'flesh_tear' | 'arterial_spray' | 'decapitation';
+
+export const DEFAULT_GORE_CONFIG: GoreConfig = {
+  enabled: true,
+  bloodPoolDuration: 60,
+  bloodSplashCount: 30,
+  dismembermentEnabled: true,
+  heartRipEnabled: true,
+  bloodTrailEnabled: true,
+  bodyPartsEnabled: true,
+  toxicBloodDamage: 8,
+  bloodDripInterval: 0.5,
+};
+
+export const EMPTY_DISMEMBERMENT: DismembermentInfo = {
+  leftArm: false,
+  rightArm: false,
+  leftLeg: false,
+  rightLeg: false,
+  head: false,
+  torso: false,
+  heart: false,
+};
+
+export const DEFAULT_HEART_RIP_STATE: HeartRipState = {
+  isBeingRipped: false,
+  ripProgress: 0,
+  ripperEntityId: -1,
+  heartVisible: false,
+  heartPos: null,
+  lastRipAttempt: 0,
+  bloodSprayIntensity: 0,
+};
+
+// Visceral death messages based on how the player died
+export const GORY_DEATH_MESSAGES: Record<string, string[]> = {
+  heartRip: [
+    'Te arrancaron el corazón del pecho. Aún late en el suelo.',
+    'Sus garras atravesaron tu torso y arrancaron tu corazón palpitante.',
+    'Tu corazón fue arrancado de tu pecho mientras aún podías sentir sus últimos latidos.',
+    'El monstruo hundió su mano en tu pecho y extrajo tu corazón como un trofeo.',
+  ],
+  dismemberment: [
+    'Tus extremidades fueron arrancadas una por una. La oscuridad te reclama.',
+    'Te desmembraron vivo. Cada desgarro fue un eco de dolor.',
+    'Tus brazos y piernas yacían esparcidos mientras la vida te abandonaba.',
+  ],
+  devoured: [
+    'Te devoraron vivo. Pudiste sentir cada mordisco, cada desgarro.',
+    'Sus fauces se cerraron alrededor de ti. Lo último que sentiste fue su aliento fétido.',
+    'Te consumieron lentamente, empezando por las extremidades.',
+  ],
+  decapitation: [
+    'Tu cabeza rodó por el suelo. Tus ojos aún veían la oscuridad.',
+    'Un solo tajo y tu cabeza se separó de tu cuerpo. El eco fue lo último que escuchaste.',
+  ],
+  generic: [
+    'La oscuridad te consume. Tu cuerpo yace roto en el suelo.',
+    'El dolor fue lo último que sentiste antes del silencio eterno.',
+    'Tu cuerpo se desplomó. La estática es todo lo que queda.',
+    'Las sombras te desgarraron. Ya no hay vuelta atrás.',
+    'Tu sangre se mezcla con la oscuridad. El eco se desvanece.',
+  ],
+};
+
+// Monster-specific gore colors
+export const MONSTER_BLOOD_COLORS: Record<EnemyType, { fresh: string; dried: string; toxic: boolean }> = {
+  stalker: { fresh: '#cc0000', dried: '#4a0000', toxic: false },
+  hunter: { fresh: '#ff2200', dried: '#5a0000', toxic: false },
+  phantom: { fresh: '#9900cc', dried: '#2a0044', toxic: false },
+  devourer: { fresh: '#8b0000', dried: '#3a0000', toxic: false },
+  abomination: { fresh: '#00cc44', dried: '#003a11', toxic: true },
+  arachnid: { fresh: '#1a6b1a', dried: '#0a2a0a', toxic: true },
+  whisperer: { fresh: '#333344', dried: '#111122', toxic: false },
+  broodmother: { fresh: '#880044', dried: '#330011', toxic: true },
+};
 
 export const ACOUSTIC_LABELS: Record<string, { label: string; description: string; color: string }> = {
   normal: { label: 'Normal', description: 'Sin propiedades acústicas especiales', color: '#00e5ff' },
