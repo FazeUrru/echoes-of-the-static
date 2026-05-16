@@ -10,6 +10,7 @@ import ParticleBackground from './ParticleBackground';
 import EchoMiniDemo from './EchoMiniDemo';
 import AudioDiary from './AudioDiary';
 import MultiplayerLobby from './MultiplayerLobby';
+import { getActiveWeeklyEvents, getActiveMonthlyEvents, getActiveWeeklyChallenges, getActiveMonthlyChallenges, getNextWeeklyReset, getNextMonthlyReset, formatTimeUntil, getDifficultyLabel, getCategoryLabel, GameEvent, GameChallenge } from '@/game/eventsSystem';
 
 // ============================================================
 // Hydration-safe hooks
@@ -976,6 +977,16 @@ export default function EchoGame() {
                 style={{ color: '#ffd600', borderColor: 'rgba(255,214,0,0.3)', background: 'rgba(255,214,0,0.05)' }}>
                 ⚠️ AVISOS
               </button>
+              <button onClick={() => document.getElementById('section-eventos')?.scrollIntoView({ behavior: 'smooth' })}
+                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95 animate-pulse"
+                style={{ color: '#ff6d00', borderColor: 'rgba(255,109,0,0.4)', background: 'rgba(255,109,0,0.08)' }}>
+                🎯 EVENTOS
+              </button>
+              <button onClick={() => document.getElementById('section-desafios')?.scrollIntoView({ behavior: 'smooth' })}
+                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95 animate-pulse"
+                style={{ color: '#e040fb', borderColor: 'rgba(224,64,251,0.4)', background: 'rgba(224,64,251,0.08)' }}>
+                🏆 DESAFÍOS
+              </button>
             </div>
 
             {/* Scroll indicator */}
@@ -1027,6 +1038,8 @@ export default function EchoGame() {
                   { icon: '🔇', title: 'Zonas Silenciosas', desc: 'Áreas donde el sonido no existe. Tu ecolocalización no funciona. Sobrevive en el silencio absoluto.', color: '#9c27b0' },
                   { icon: '👥', title: 'Co-op Asimétrico', desc: 'El Oído ve el mapa. El Cuerpo se mueve. Coordínate con tu compañero para sobrevivir.', color: '#76ff03' },
                   { icon: '☠️', title: 'Modo Hardcore', desc: 'Una sola vida. Sin HUD. Sin linterna. Solo audio binaural. ¿Te atreves?', color: '#ffd600' },
+                  { icon: '🎯', title: '30 Eventos + 35 Desafíos', desc: 'Misiones temporales que rotan cada semana y mes. 8 categorías, 5 dificultades, bonus por racha.', color: '#e040fb' },
+                  { icon: '🩸', title: 'Gore y Desmembramiento', desc: 'Sangre real que fluye. Extracción de corazones. Desmembramiento dinámico. Cada muerte es visceral.', color: '#8b0000' },
                 ].map((feat, i) => (
                   <div key={i} className="p-2.5 sm:p-4 border rounded-sm" style={{ borderColor: `${feat.color}20`, background: `${feat.color}05` }}>
                     <div className="text-lg sm:text-2xl mb-1 sm:mb-2">{feat.icon}</div>
@@ -1132,6 +1145,14 @@ export default function EchoGame() {
               <div className="space-y-3 sm:space-y-4">
                 {[
                   {
+                    date: '06 Mar 2026',
+                    tag: 'v5.0',
+                    tagColor: '#e040fb',
+                    title: 'Misiones y Desafíos — 30 Eventos + 35 Desafíos con Rotación Automática',
+                    desc: 'Sistema de misiones temporales que se actualizan automáticamente cada semana y cada mes. 30 eventos y 35 desafíos únicos con 8 categorías y 5 niveles de dificultad. Bonus por racha consecutiva. Lore exclusivo en eventos especiales.',
+                    icon: '🎯',
+                  },
+                  {
                     date: '05 Mar 2026',
                     tag: 'v4.0',
                     tagColor: '#76ff03',
@@ -1223,6 +1244,24 @@ export default function EchoGame() {
 
                 <div className="space-y-4 sm:space-y-6">
                   {[
+                    {
+                      version: 'v5.0',
+                      date: '06 Mar 2026',
+                      color: '#e040fb',
+                      title: 'Misiones y Desafíos',
+                      changes: [
+                        '30 eventos únicos con rotación automática semanal y mensual',
+                        '35 desafíos con bonus de racha consecutiva',
+                        'Eventos semanales: 20 misiones que rotan cada lunes',
+                        'Eventos mensuales: 10 misiones masivas que rotan cada 1º de mes',
+                        'Desafíos semanales: 25 retos con bonus por completar en racha',
+                        'Desafíos mensuales: 10 desafíos legendarios con recompensas masivas',
+                        '8 categorías: Supervivencia, Combate, Exploración, Velocidad, Sigilo, Multijugador, Hardcore, Gore',
+                        '5 niveles de dificultad por evento: Fácil, Medio, Difícil, Extremo, Pesadilla',
+                        'Sistema de rotación automática basado en semana y mes actuales',
+                        'Lore exclusivo en eventos especiales al pasar el ratón',
+                      ],
+                    },
                     {
                       version: 'v4.0',
                       date: '05 Mar 2026',
@@ -1489,6 +1528,272 @@ export default function EchoGame() {
             </div>
           </section>
 
+          {/* ===== EVENTOS (EVENTS) SECTION ===== */}
+          <section id="section-eventos" className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(20,8,0,1) 50%, rgba(0,0,0,1) 100%)' }}>
+            <div className="max-w-4xl mx-auto">
+              <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#ff6d00', textShadow: '0 0 20px rgba(255,109,0,0.3)' }}>
+                🎯 EVENTOS
+              </h2>
+              <p className="font-mono text-[10px] sm:text-xs text-center mb-2" style={{ color: 'rgba(255,109,0,0.3)' }}>
+                Misiones temporales que rotan automáticamente — 30 eventos únicos
+              </p>
+              <div className="flex justify-center gap-4 mb-6 sm:mb-8">
+                <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border" style={{ color: '#ff6d00', borderColor: 'rgba(255,109,0,0.3)', background: 'rgba(255,109,0,0.05)' }}>
+                  🔄 Semanal: {formatTimeUntil(getNextWeeklyReset())}
+                </div>
+                <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border" style={{ color: '#ffd600', borderColor: 'rgba(255,214,0,0.3)', background: 'rgba(255,214,0,0.05)' }}>
+                  📅 Mensual: {formatTimeUntil(getNextMonthlyReset())}
+                </div>
+              </div>
+
+              {/* Weekly Events */}
+              <div className="mb-6 sm:mb-8">
+                <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                  <span className="text-lg sm:text-xl">🔄</span>
+                  <h3 className="font-mono text-sm sm:text-base tracking-widest" style={{ color: '#ff6d00' }}>EVENTOS SEMANALES</h3>
+                  <span className="font-mono text-[8px] sm:text-[9px] px-2 py-0.5 rounded-sm" style={{ color: '#ff6d00', backgroundColor: 'rgba(255,109,0,0.1)', border: '1px solid rgba(255,109,0,0.3)' }}>
+                    Se actualizan cada lunes
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  {getActiveWeeklyEvents(5).map((evt) => {
+                    const diffInfo = getDifficultyLabel(evt.difficulty);
+                    const catInfo = getCategoryLabel(evt.category);
+                    return (
+                      <div key={evt.id} className="p-3 sm:p-4 border rounded-sm group hover:border-opacity-60 transition-all duration-300" style={{ borderColor: `${evt.color}20`, background: `${evt.color}03` }}>
+                        <div className="flex items-start gap-2 sm:gap-3">
+                          <div className="text-xl sm:text-2xl mt-0.5 shrink-0">{evt.icon}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: diffInfo.color, backgroundColor: `${diffInfo.color}15`, border: `1px solid ${diffInfo.color}30` }}>
+                                {diffInfo.label}
+                              </span>
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: evt.color, backgroundColor: `${evt.color}10`, border: `1px solid ${evt.color}25` }}>
+                                {catInfo.icon} {catInfo.label}
+                              </span>
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.3)' }}>
+                                +{evt.reward} pts
+                              </span>
+                            </div>
+                            <h4 className="font-mono text-[10px] sm:text-xs font-bold mb-0.5" style={{ color: evt.color }}>{evt.name}</h4>
+                            <p className="font-mono text-[8px] sm:text-[10px] leading-relaxed mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>{evt.description}</p>
+                            <div className="font-mono text-[8px] sm:text-[9px] font-bold" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                              🎯 {evt.objective}: {evt.targetValue} {evt.targetUnit}
+                            </div>
+                            {evt.loreText && (
+                              <p className="font-mono text-[7px] sm:text-[8px] leading-relaxed italic mt-1 opacity-0 group-hover:opacity-60 transition-opacity duration-300" style={{ color: evt.color }}>
+                                &ldquo;{evt.loreText}&rdquo;
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Monthly Events */}
+              <div>
+                <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                  <span className="text-lg sm:text-xl">📅</span>
+                  <h3 className="font-mono text-sm sm:text-base tracking-widest" style={{ color: '#ffd600' }}>EVENTOS MENSUALES</h3>
+                  <span className="font-mono text-[8px] sm:text-[9px] px-2 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.3)' }}>
+                    Se actualizan cada 1º de mes
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  {getActiveMonthlyEvents(4).map((evt) => {
+                    const diffInfo = getDifficultyLabel(evt.difficulty);
+                    const catInfo = getCategoryLabel(evt.category);
+                    return (
+                      <div key={evt.id} className="p-3 sm:p-4 border-2 rounded-sm group hover:border-opacity-60 transition-all duration-300" style={{ borderColor: `${evt.color}30`, background: `${evt.color}05` }}>
+                        <div className="flex items-start gap-2 sm:gap-3">
+                          <div className="text-xl sm:text-2xl mt-0.5 shrink-0">{evt.icon}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: diffInfo.color, backgroundColor: `${diffInfo.color}15`, border: `1px solid ${diffInfo.color}30` }}>
+                                {diffInfo.label}
+                              </span>
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: evt.color, backgroundColor: `${evt.color}10`, border: `1px solid ${evt.color}25` }}>
+                                {catInfo.icon} {catInfo.label}
+                              </span>
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.3)' }}>
+                                +{evt.reward} pts
+                              </span>
+                            </div>
+                            <h4 className="font-mono text-[10px] sm:text-xs font-bold mb-0.5" style={{ color: evt.color }}>{evt.name}</h4>
+                            <p className="font-mono text-[8px] sm:text-[10px] leading-relaxed mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>{evt.description}</p>
+                            <div className="font-mono text-[8px] sm:text-[9px] font-bold" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                              🎯 {evt.objective}: {evt.targetValue} {evt.targetUnit}
+                            </div>
+                            {evt.loreText && (
+                              <p className="font-mono text-[7px] sm:text-[8px] leading-relaxed italic mt-1 opacity-0 group-hover:opacity-60 transition-opacity duration-300" style={{ color: evt.color }}>
+                                &ldquo;{evt.loreText}&rdquo;
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Events stats summary */}
+              <div className="mt-6 text-center">
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+                  <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border" style={{ color: '#ff6d00', borderColor: 'rgba(255,109,0,0.2)', background: 'rgba(255,109,0,0.03)' }}>
+                    🔄 20 eventos semanales
+                  </div>
+                  <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border" style={{ color: '#ffd600', borderColor: 'rgba(255,214,0,0.2)', background: 'rgba(255,214,0,0.03)' }}>
+                    📅 10 eventos mensuales
+                  </div>
+                  <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border" style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.2)', background: 'rgba(255,23,68,0.03)' }}>
+                    🎯 30 eventos totales
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ===== DESAFÍOS (CHALLENGES) SECTION ===== */}
+          <section id="section-desafios" className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(15,0,20,1) 50%, rgba(0,0,0,1) 100%)' }}>
+            <div className="max-w-4xl mx-auto">
+              <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#e040fb', textShadow: '0 0 20px rgba(224,64,251,0.3)' }}>
+                🏆 DESAFÍOS
+              </h2>
+              <p className="font-mono text-[10px] sm:text-xs text-center mb-2" style={{ color: 'rgba(224,64,251,0.3)' }}>
+                Retos que ponen a prueba tu habilidad — 35 desafíos con rotación automática
+              </p>
+              <div className="flex justify-center gap-4 mb-6 sm:mb-8">
+                <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border" style={{ color: '#e040fb', borderColor: 'rgba(224,64,251,0.3)', background: 'rgba(224,64,251,0.05)' }}>
+                  🔄 Semanal: {formatTimeUntil(getNextWeeklyReset())}
+                </div>
+                <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border" style={{ color: '#ffd600', borderColor: 'rgba(255,214,0,0.3)', background: 'rgba(255,214,0,0.05)' }}>
+                  📅 Mensual: {formatTimeUntil(getNextMonthlyReset())}
+                </div>
+              </div>
+
+              {/* Weekly Challenges */}
+              <div className="mb-6 sm:mb-8">
+                <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                  <span className="text-lg sm:text-xl">🔄</span>
+                  <h3 className="font-mono text-sm sm:text-base tracking-widest" style={{ color: '#e040fb' }}>DESAFÍOS SEMANALES</h3>
+                  <span className="font-mono text-[8px] sm:text-[9px] px-2 py-0.5 rounded-sm" style={{ color: '#e040fb', backgroundColor: 'rgba(224,64,251,0.1)', border: '1px solid rgba(224,64,251,0.3)' }}>
+                    +bonus racha
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  {getActiveWeeklyChallenges(8).map((ch) => {
+                    const diffInfo = getDifficultyLabel(ch.difficulty);
+                    const catInfo = getCategoryLabel(ch.category);
+                    return (
+                      <div key={ch.id} className="p-3 sm:p-4 border rounded-sm group hover:border-opacity-60 transition-all duration-300" style={{ borderColor: `${ch.color}20`, background: `${ch.color}03` }}>
+                        <div className="flex items-start gap-2 sm:gap-3">
+                          <div className="text-xl sm:text-2xl mt-0.5 shrink-0">{ch.icon}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: diffInfo.color, backgroundColor: `${diffInfo.color}15`, border: `1px solid ${diffInfo.color}30` }}>
+                                {diffInfo.label}
+                              </span>
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: ch.color, backgroundColor: `${ch.color}10`, border: `1px solid ${ch.color}25` }}>
+                                {catInfo.icon} {catInfo.label}
+                              </span>
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.3)' }}>
+                                +{ch.reward} pts
+                              </span>
+                              {ch.streakReward && (
+                                <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#e040fb', backgroundColor: 'rgba(224,64,251,0.1)', border: '1px solid rgba(224,64,251,0.3)' }}>
+                                  🔥 +{ch.streakReward} racha
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="font-mono text-[10px] sm:text-xs font-bold mb-0.5" style={{ color: ch.color }}>{ch.name}</h4>
+                            <p className="font-mono text-[8px] sm:text-[10px] leading-relaxed mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>{ch.description}</p>
+                            <div className="font-mono text-[8px] sm:text-[9px] font-bold" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                              🎯 {ch.objective}: {ch.targetValue} {ch.targetUnit}
+                            </div>
+                            {ch.loreText && (
+                              <p className="font-mono text-[7px] sm:text-[8px] leading-relaxed italic mt-1 opacity-0 group-hover:opacity-60 transition-opacity duration-300" style={{ color: ch.color }}>
+                                &ldquo;{ch.loreText}&rdquo;
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Monthly Challenges */}
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                  <span className="text-lg sm:text-xl">📅</span>
+                  <h3 className="font-mono text-sm sm:text-base tracking-widest" style={{ color: '#ffd600' }}>DESAFÍOS MENSUALES</h3>
+                  <span className="font-mono text-[8px] sm:text-[9px] px-2 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.3)' }}>
+                    Recompensas masivas
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  {getActiveMonthlyChallenges(5).map((ch) => {
+                    const diffInfo = getDifficultyLabel(ch.difficulty);
+                    const catInfo = getCategoryLabel(ch.category);
+                    return (
+                      <div key={ch.id} className="p-3 sm:p-4 border-2 rounded-sm group hover:border-opacity-60 transition-all duration-300" style={{ borderColor: `${ch.color}30`, background: `${ch.color}05` }}>
+                        <div className="flex items-start gap-2 sm:gap-3">
+                          <div className="text-xl sm:text-2xl mt-0.5 shrink-0">{ch.icon}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: diffInfo.color, backgroundColor: `${diffInfo.color}15`, border: `1px solid ${diffInfo.color}30` }}>
+                                {diffInfo.label}
+                              </span>
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: ch.color, backgroundColor: `${ch.color}10`, border: `1px solid ${ch.color}25` }}>
+                                {catInfo.icon} {catInfo.label}
+                              </span>
+                              <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.3)' }}>
+                                +{ch.reward} pts
+                              </span>
+                              {ch.streakReward && (
+                                <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#e040fb', backgroundColor: 'rgba(224,64,251,0.1)', border: '1px solid rgba(224,64,251,0.3)' }}>
+                                  🔥 +{ch.streakReward} racha
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="font-mono text-[10px] sm:text-xs font-bold mb-0.5" style={{ color: ch.color }}>{ch.name}</h4>
+                            <p className="font-mono text-[8px] sm:text-[10px] leading-relaxed mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>{ch.description}</p>
+                            <div className="font-mono text-[8px] sm:text-[9px] font-bold" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                              🎯 {ch.objective}: {ch.targetValue} {ch.targetUnit}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Challenges stats summary */}
+              <div className="mt-6 text-center">
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+                  <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border" style={{ color: '#e040fb', borderColor: 'rgba(224,64,251,0.2)', background: 'rgba(224,64,251,0.03)' }}>
+                    🔄 25 desafíos semanales
+                  </div>
+                  <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border" style={{ color: '#ffd600', borderColor: 'rgba(255,214,0,0.2)', background: 'rgba(255,214,0,0.03)' }}>
+                    📅 10 desafíos mensuales
+                  </div>
+                  <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border" style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.2)', background: 'rgba(255,23,68,0.03)' }}>
+                    🏆 35 desafíos totales
+                  </div>
+                  <div className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border" style={{ color: '#e040fb', borderColor: 'rgba(224,64,251,0.2)', background: 'rgba(224,64,251,0.03)' }}>
+                    🔥 Bonus por racha consecutiva
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* ===== CONTROLS REFERENCE ===== */}
           <section className="relative z-10 py-8 sm:py-12 px-4 sm:px-6">
             <div className="max-w-md mx-auto text-center">
@@ -1500,6 +1805,7 @@ export default function EchoGame() {
                 <p>E: Interactuar | 1-4: Inventario | Q: Usar | G: Soltar</p>
                 <p>⚔️ 10 armas | 👹 12 monstruos | 👥 5 jugadores | 💀 ¡Que te persigan!</p>
                 <p>🩸 Sangre real | ❤️‍🔥 Arrancan corazones | 💀 Desmembramiento</p>
+                <p>🎯 30 eventos | 🏆 35 desafíos | 🔄 Rotación semanal/mensual</p>
               </div>
               <div className="mt-3 font-mono text-[9px] sm:text-[10px] opacity-20" style={{ color: '#0097a7' }}>🎧 Auriculares recomendados</div>
               <div className="mt-2 font-mono text-[8px] sm:text-[9px] opacity-15" style={{ color: '#ffd700' }}>🏆 Complétalo rápido para desbloquear personajes exclusivos</div>
@@ -1509,7 +1815,7 @@ export default function EchoGame() {
           {/* ===== FOOTER ===== */}
           <footer className="relative z-10 py-6 px-6 text-center border-t" style={{ borderColor: 'rgba(0,229,255,0.05)' }}>
             <p className="font-mono text-[9px]" style={{ color: 'rgba(0,229,255,0.2)' }}>
-              ECHOES OF THE STATIC v4.0 — Ecos de la Estática
+              ECHOES OF THE STATIC v5.0 — Ecos de la Estática
             </p>
           </footer>
         </div>
