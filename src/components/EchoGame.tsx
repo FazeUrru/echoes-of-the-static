@@ -48,6 +48,7 @@ export default function EchoGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<EchoGameEngine | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const landingPageRef = useRef<HTMLDivElement>(null);
 
   // ---- Load saved settings from localStorage (before useState calls) ----
   const loadSavedSettings = () => {
@@ -105,6 +106,33 @@ export default function EchoGame() {
 
   // ---- Landing page section state ----
   const [landingSection, setLandingSection] = useState<'hero' | 'demo' | 'diary' | 'trailer'>('hero');
+  const [showFloatingNav, setShowFloatingNav] = useState(false);
+  const [showNavPanel, setShowNavPanel] = useState(false);
+
+  // ---- Scroll to section function ----
+  const scrollToSection = useCallback((sectionId: string) => {
+    const container = landingPageRef.current;
+    if (!container) return;
+    const element = container.querySelector(`#${sectionId}`) as HTMLElement;
+    if (element) {
+      const containerRect = container.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
+      const scrollOffset = elementRect.top - containerRect.top + container.scrollTop - 12;
+      container.scrollTo({ top: scrollOffset, behavior: 'smooth' });
+    }
+    setShowNavPanel(false);
+  }, []);
+
+  // ---- Track scroll position for floating nav ----
+  useEffect(() => {
+    const container = landingPageRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      setShowFloatingNav(container.scrollTop > 300);
+    };
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // ---- Cinematic overlay state ----
   const [showCinematic, setShowCinematic] = useState(false);
@@ -1017,7 +1045,7 @@ export default function EchoGame() {
 
       {/* ===== MENU / LANDING PAGE ===== */}
       {gameState === 'menu' && !isStarted && !showMiniDemo && !showCinematic && (
-        <div className="landing-page absolute inset-0 overflow-y-auto bg-black z-10" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+        <div ref={landingPageRef} className="landing-page absolute inset-0 overflow-y-auto bg-black z-10" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
           {/* Particle Background */}
           <ParticleBackground />
 
@@ -1034,7 +1062,7 @@ export default function EchoGame() {
                 ECHOES
               </h1>
               <h2 className="text-lg sm:text-2xl md:text-4xl font-mono tracking-[0.12em] sm:tracking-[0.2em] mb-1 sm:mb-2" style={{ color: '#0097a7' }}>OF THE STATIC</h2>
-              <div className="text-xs sm:text-sm font-mono opacity-40" style={{ color: '#004d40' }}>v4.0 — Frecuencia Compartida</div>
+              <div className="text-xs sm:text-sm font-mono opacity-40" style={{ color: '#004d40' }}>v5.0 — Misiones y Desafíos</div>
             </div>
 
             {/* Improved Hook Text */}
@@ -1138,36 +1166,36 @@ export default function EchoGame() {
               </SoundWaveButton>
             </div>
 
-            {/* Quick Navigation to sections */}
-            <div className="flex flex-wrap justify-center gap-2 mb-4">
-              <button onClick={() => document.getElementById('section-multiplayer')?.scrollIntoView({ behavior: 'smooth' })}
-                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95 animate-pulse"
-                style={{ color: '#76ff03', borderColor: 'rgba(118,255,3,0.4)', background: 'rgba(118,255,3,0.08)' }}>
+            {/* Quick Navigation to sections — larger touch targets for mobile */}
+            <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2 mb-4 px-2">
+              <button onClick={() => scrollToSection('section-multiplayer')}
+                className="font-mono text-[10px] sm:text-[10px] px-3 py-2 sm:py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95 animate-pulse"
+                style={{ color: '#76ff03', borderColor: 'rgba(118,255,3,0.4)', background: 'rgba(118,255,3,0.08)', minHeight: 36 }}>
                 👥 MULTIJUGADOR
               </button>
-              <button onClick={() => document.getElementById('section-noticias')?.scrollIntoView({ behavior: 'smooth' })}
-                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95"
-                style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.3)', background: 'rgba(255,23,68,0.05)' }}>
+              <button onClick={() => scrollToSection('section-noticias')}
+                className="font-mono text-[10px] sm:text-[10px] px-3 py-2 sm:py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95"
+                style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.3)', background: 'rgba(255,23,68,0.05)', minHeight: 36 }}>
                 📰 NOTICIAS
               </button>
-              <button onClick={() => document.getElementById('section-versiones')?.scrollIntoView({ behavior: 'smooth' })}
-                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95"
-                style={{ color: '#00e5ff', borderColor: 'rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.05)' }}>
+              <button onClick={() => scrollToSection('section-versiones')}
+                className="font-mono text-[10px] sm:text-[10px] px-3 py-2 sm:py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95"
+                style={{ color: '#00e5ff', borderColor: 'rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.05)', minHeight: 36 }}>
                 📋 VERSIONES
               </button>
-              <button onClick={() => document.getElementById('section-avisos')?.scrollIntoView({ behavior: 'smooth' })}
-                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95"
-                style={{ color: '#ffd600', borderColor: 'rgba(255,214,0,0.3)', background: 'rgba(255,214,0,0.05)' }}>
+              <button onClick={() => scrollToSection('section-avisos')}
+                className="font-mono text-[10px] sm:text-[10px] px-3 py-2 sm:py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95"
+                style={{ color: '#ffd600', borderColor: 'rgba(255,214,0,0.3)', background: 'rgba(255,214,0,0.05)', minHeight: 36 }}>
                 ⚠️ AVISOS
               </button>
-              <button onClick={() => document.getElementById('section-eventos')?.scrollIntoView({ behavior: 'smooth' })}
-                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95 animate-pulse"
-                style={{ color: '#ff6d00', borderColor: 'rgba(255,109,0,0.4)', background: 'rgba(255,109,0,0.08)' }}>
+              <button onClick={() => scrollToSection('section-eventos')}
+                className="font-mono text-[10px] sm:text-[10px] px-3 py-2 sm:py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95 animate-pulse"
+                style={{ color: '#ff6d00', borderColor: 'rgba(255,109,0,0.4)', background: 'rgba(255,109,0,0.08)', minHeight: 36 }}>
                 🎯 EVENTOS
               </button>
-              <button onClick={() => document.getElementById('section-desafios')?.scrollIntoView({ behavior: 'smooth' })}
-                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95 animate-pulse"
-                style={{ color: '#e040fb', borderColor: 'rgba(224,64,251,0.4)', background: 'rgba(224,64,251,0.08)' }}>
+              <button onClick={() => scrollToSection('section-desafios')}
+                className="font-mono text-[10px] sm:text-[10px] px-3 py-2 sm:py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95 animate-pulse"
+                style={{ color: '#e040fb', borderColor: 'rgba(224,64,251,0.4)', background: 'rgba(224,64,251,0.08)', minHeight: 36 }}>
                 🏆 DESAFÍOS
               </button>
             </div>
@@ -2010,6 +2038,48 @@ export default function EchoGame() {
             </p>
           </footer>
         </div>
+      )}
+
+      {/* ===== FLOATING MOBILE NAVIGATION ===== */}
+      {gameState === 'menu' && !isStarted && !showMiniDemo && !showCinematic && showFloatingNav && (
+        <>
+          {/* Floating nav button */}
+          <button className="floating-nav-btn"
+            onClick={() => setShowNavPanel(!showNavPanel)}>
+            {showNavPanel ? '✕' : '☰'}
+          </button>
+          {/* Floating nav panel */}
+          {showNavPanel && (
+            <>
+              {/* Backdrop */}
+              <div className="fixed inset-0 z-40" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={() => setShowNavPanel(false)} />
+              <div className="floating-nav-panel">
+                <div className="floating-nav-item" onClick={() => scrollToSection('section-multiplayer')}>
+                  <span style={{ color: '#76ff03' }}>👥</span> Multijugador
+                </div>
+                <div className="floating-nav-item" onClick={() => scrollToSection('section-noticias')}>
+                  <span style={{ color: '#ff1744' }}>📰</span> Noticias
+                </div>
+                <div className="floating-nav-item" onClick={() => scrollToSection('section-versiones')}>
+                  <span style={{ color: '#00e5ff' }}>📋</span> Versiones
+                </div>
+                <div className="floating-nav-item" onClick={() => scrollToSection('section-avisos')}>
+                  <span style={{ color: '#ffd600' }}>⚠️</span> Avisos
+                </div>
+                <div className="floating-nav-item" onClick={() => scrollToSection('section-eventos')}>
+                  <span style={{ color: '#ff6d00' }}>🎯</span> Eventos
+                </div>
+                <div className="floating-nav-item" onClick={() => scrollToSection('section-desafios')}>
+                  <span style={{ color: '#e040fb' }}>🏆</span> Desafíos
+                </div>
+                <div style={{ borderTop: '1px solid rgba(0,229,255,0.15)', margin: '4px 12px' }} />
+                <div className="floating-nav-item" onClick={() => { landingPageRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); setShowNavPanel(false); }}>
+                  <span style={{ color: '#00e5ff' }}>⬆️</span> Ir arriba
+                </div>
+              </div>
+            </>
+          )}
+        </>
       )}
 
       {/* ===== CINEMATIC OVERLAY ===== */}
