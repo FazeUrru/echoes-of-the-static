@@ -46,15 +46,35 @@ export default function EchoGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<EchoGameEngine | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ---- Load saved settings from localStorage (before useState calls) ----
+  const loadSavedSettings = () => {
+    try {
+      const saved = localStorage.getItem('echoes_settings');
+      if (saved) {
+        const data = JSON.parse(saved);
+        return {
+          profile: data.profile as ProfileSettings | undefined,
+          advanced: data.advanced as AdvancedSettings | undefined,
+          controls: data.controls as ControlBinding[] | undefined,
+          unlockedChapters: data.unlockedChapters as number | undefined,
+          difficulty: data.difficulty as Difficulty | undefined,
+        };
+      }
+    } catch { /* ignore */ }
+    return { profile: undefined, advanced: undefined, controls: undefined, unlockedChapters: undefined, difficulty: undefined };
+  };
+  const savedSettings = loadSavedSettings();
+
   const [gameState, setGameState] = useState<GameState>('menu');
-  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
+  const [difficulty, setDifficulty] = useState<Difficulty>(savedSettings.difficulty || 'medium');
   const [selectedChapter, setSelectedChapter] = useState(1);
-  const [unlockedChapters, setUnlockedChapters] = useState(1);
+  const [unlockedChapters, setUnlockedChapters] = useState(savedSettings.unlockedChapters || 1);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'profile' | 'advanced' | 'controls'>('profile');
-  const [profile, setProfile] = useState<ProfileSettings>({ ...DEFAULT_PROFILE });
-  const [advanced, setAdvanced] = useState<AdvancedSettings>({ ...DEFAULT_ADVANCED });
-  const [controls, setControls] = useState<ControlBinding[]>([...DEFAULT_CONTROLS]);
+  const [profile, setProfile] = useState<ProfileSettings>(savedSettings.profile ? { ...DEFAULT_PROFILE, ...savedSettings.profile } : { ...DEFAULT_PROFILE });
+  const [advanced, setAdvanced] = useState<AdvancedSettings>(savedSettings.advanced ? { ...DEFAULT_ADVANCED, ...savedSettings.advanced } : { ...DEFAULT_ADVANCED });
+  const [controls, setControls] = useState<ControlBinding[]>(savedSettings.controls && savedSettings.controls.length > 0 ? savedSettings.controls : [...DEFAULT_CONTROLS]);
   const [remappingAction, setRemappingAction] = useState<string | null>(null);
   const [isStarted, setIsStarted] = useState(false);
   const isMobile = useIsTouchDevice();
@@ -282,6 +302,13 @@ export default function EchoGame() {
     }
   }, [profile, advanced, controls]);
 
+  // ---- Auto-save settings to localStorage whenever they change ----
+  useEffect(() => {
+    try {
+      localStorage.setItem('echoes_settings', JSON.stringify({ profile, advanced, controls, unlockedChapters, difficulty }));
+    } catch { /* ignore quota errors */ }
+  }, [profile, advanced, controls, unlockedChapters, difficulty]);
+
   const handleRemapKey = useCallback((action: string, key: string) => {
     setControls(prev => prev.map(c => c.action === action ? { ...c, key } : c));
     setRemappingAction(null);
@@ -304,7 +331,7 @@ export default function EchoGame() {
     <div ref={containerRef} className="relative w-full h-[100dvh] bg-black overflow-hidden select-none game-container" style={{ cursor: gameState === 'playing' && !isMobile ? 'crosshair' : 'default', boxShadow: gameState === 'playing' && engineLiveState.sonarMode === 'passive' ? 'inset 0 0 60px rgba(156,39,176,0.15)' : 'none', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
       onClick={() => { if (gameState === 'playing' && !isMobile && canvasRef.current) canvasRef.current.requestPointerLock(); }}>
 
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none', pointerEvents: gameState === 'menu' && !isStarted ? 'none' : 'auto' }} />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none', pointerEvents: gameState === 'menu' && !isStarted ? 'none' : 'auto', zIndex: showCinematic ? 15 : 0 }} />
 
       {/* ===== TOUCH LOOK AREA (Right half of screen for swiping to look) ===== */}
       {isMobile && gameState === 'playing' && (
