@@ -1,11 +1,11 @@
 // ============================================================
-// Echoes of the Static - Type Definitions v2.5
+// Echoes of the Static - Type Definitions v4.0
 // ============================================================
 
 export interface Vec2 { x: number; y: number; }
 
 // ---- Difficulty ----
-export type Difficulty = 'easy' | 'medium' | 'hard' | 'extreme' | 'impossible';
+export type Difficulty = 'tourist' | 'easy' | 'medium' | 'hard' | 'extreme' | 'nightmare' | 'impossible' | 'void';
 
 export interface DifficultyConfig {
   label: string;
@@ -26,6 +26,13 @@ export interface DifficultyConfig {
 }
 
 export const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
+  tourist: {
+    label: 'Turista',
+    description: 'Solo quieres explorar. Las entidades te ignoran mayormente',
+    playerSpeed: 3.5, sneakSpeed: 1.8, entityBaseSpeed: 0.4, entityChaseSpeed: 1.5,
+    entityHearingRange: 5, pulseRadius: 22, pulseCooldown: 1500, footstepRadius: 2,
+    flashlightDrain: 0.1, entityCount: 1, killDistance: 0.5, inventorySize: 8, itemSpawnRate: 1.5,
+  },
   easy: {
     label: 'Fácil',
     description: 'Entidades lentas, eco amplio, linterna duradera',
@@ -61,12 +68,26 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
     entityHearingRange: 22, pulseRadius: 8, pulseCooldown: 7000, footstepRadius: 8,
     flashlightDrain: 2.0, entityCount: 7, killDistance: 1.2, inventorySize: 2, itemSpawnRate: 0.4,
   },
+  nightmare: {
+    label: 'Pesadilla',
+    description: 'El horror te persigue hasta tus sueños. Sin piedad',
+    playerSpeed: 2.1, sneakSpeed: 0.9, entityBaseSpeed: 1.7, entityChaseSpeed: 3.8,
+    entityHearingRange: 20, pulseRadius: 9, pulseCooldown: 6000, footstepRadius: 8,
+    flashlightDrain: 1.5, entityCount: 6, killDistance: 1.1, inventorySize: 3, itemSpawnRate: 0.5,
+  },
+  void: {
+    label: 'Vacío',
+    description: 'La estática te consume. No existe la esperanza. Modo permanente',
+    playerSpeed: 1.8, sneakSpeed: 0.7, entityBaseSpeed: 2.0, entityChaseSpeed: 4.5,
+    entityHearingRange: 25, pulseRadius: 6, pulseCooldown: 8000, footstepRadius: 10,
+    flashlightDrain: 2.5, entityCount: 8, killDistance: 1.3, inventorySize: 2, itemSpawnRate: 0.3,
+  },
 };
 
 // ---- Enemy Types ----
 export type SonarMode = 'passive' | 'active';
 
-export type EnemyType = 'stalker' | 'hunter' | 'phantom' | 'devourer' | 'abomination' | 'arachnid' | 'whisperer' | 'broodmother';
+export type EnemyType = 'stalker' | 'hunter' | 'phantom' | 'devourer' | 'abomination' | 'arachnid' | 'whisperer' | 'broodmother' | 'echo' | 'mirage' | 'conductor' | 'hive';
 
 export interface EnemyTemplate {
   type: EnemyType;
@@ -132,6 +153,31 @@ export const ENEMY_TEMPLATES: Record<EnemyType, EnemyTemplate> = {
     baseSpeed: 0.3, chaseSpeed: 1.8, hearingRange: 22, color: '#880e4f', glowColor: '#ad1457', eyeColor: '#f50057',
     behavior: 'spawns parasites, area denial with bile, absorbs damage from killed parasites',
     maxHealth: 300, damage: 50,
+  },
+  // ===== MULTIPLAYER-ONLY MONSTERS =====
+  echo: {
+    type: 'echo', name: 'El Eco', description: 'Una copia distorsionada de un jugador muerto. Imita su voz y sus movimientos. Aparece solo en multijugador.',
+    baseSpeed: 1.0, chaseSpeed: 3.0, hearingRange: 16, color: '#00bcd4', glowColor: '#4dd0e1', eyeColor: '#ffffff',
+    behavior: "mimics dead player's voice, appears as player silhouette, targets separated players",
+    maxHealth: 120, damage: 30,
+  },
+  mirage: {
+    type: 'mirage', name: 'El Espejismo', description: 'Crea duplicados de sí mismo que confunden a todo el equipo. Solo uno es real.',
+    baseSpeed: 0.8, chaseSpeed: 2.5, hearingRange: 20, color: '#e91e63', glowColor: '#f48fb1', eyeColor: '#ff4081',
+    behavior: 'creates 3-5 illusions of itself, real one is slightly different, illusions damage on touch then vanish',
+    maxHealth: 90, damage: 25,
+  },
+  conductor: {
+    type: 'conductor', name: 'El Conductor', description: 'Manipula el sonido ambiente. Puede hacer que escuches pasos donde no hay nadie o silenciar sonidos reales.',
+    baseSpeed: 0.5, chaseSpeed: 2.0, hearingRange: 30, color: '#ff5722', glowColor: '#ff8a65', eyeColor: '#ffab00',
+    behavior: 'creates false audio cues, silences real sounds, amplifies player noise, targeted at groups',
+    maxHealth: 150, damage: 40,
+  },
+  hive: {
+    type: 'hive', name: 'La Colmena', description: 'Un organismo colectivo de cuerpos fusionados. Se divide al ser herido, creando múltiples amenazas.',
+    baseSpeed: 0.3, chaseSpeed: 1.5, hearingRange: 24, color: '#795548', glowColor: '#a1887f', eyeColor: '#ff6f00',
+    behavior: 'splits into 2-3 smaller entities when damaged below 50% health, smaller entities are faster, group tactics',
+    maxHealth: 400, damage: 55,
   },
 };
 
@@ -372,6 +418,25 @@ export const CHAPTERS: Chapter[] = [
       "Al apagar la torre, los liberarás... o los condenarás al silencio eterno.",
     ],
   },
+  {
+    id: 7, name: 'Frecuencia Compartida', subtitle: 'Capítulo Multijugador',
+    description: 'Cinco sujetos. Una frecuencia. La estática los conecta y los condena.',
+    mapType: 'building', mapWidth: 60, mapHeight: 60, roomCount: 16,
+    enemies: [
+      { type: 'stalker', count: 2 }, { type: 'hunter', count: 2 },
+      { type: 'echo', count: 2 }, { type: 'mirage', count: 1 },
+      { type: 'conductor', count: 1 }, { type: 'hive', count: 1 },
+    ],
+    itemDensity: 0.9, hasDoors: true, hasOutdoor: true,
+    introText: 'No están solos. Otros como ustedes despiertan en la misma oscuridad. La estática conecta sus frecuencias... pero también las de ellos.',
+    outroText: 'La frecuencia compartida se disipa. Los que quedan emergen cambiados para siempre.',
+    loreText: [
+      "El Proyecto Eco nunca fue para una sola persona. Fue diseñado para crear una red de consciencia compartida.",
+      "Los sujetos que sobrevivieron juntos desarrollaron ecolocalización colectiva. Podían ver a través de los oídos de los demás.",
+      "Pero la red también conectó a las entidades. Ahora cazan en manada.",
+      "Registro final: 'Cinco entraron. Su frecuencia combinada abrió una puerta que no debería existir.'",
+    ],
+  },
 ];
 
 // ---- Echolocation ----
@@ -524,6 +589,14 @@ export const NEON_COLORS = {
   whispererGlow: '#37474f',
   broodmother: '#880e4f',
   broodmotherGlow: '#ad1457',
+  echo: '#00bcd4',
+  echoGlow: '#4dd0e1',
+  mirage: '#e91e63',
+  mirageGlow: '#f48fb1',
+  conductor: '#ff5722',
+  conductorGlow: '#ff8a65',
+  hive: '#795548',
+  hiveGlow: '#a1887f',
   pulse: '#00e5ff',
   flashlight: '#ffe082',
   item: '#ffd600',
@@ -772,6 +845,10 @@ export const MONSTER_BLOOD_COLORS: Record<EnemyType, { fresh: string; dried: str
   arachnid: { fresh: '#1a6b1a', dried: '#0a2a0a', toxic: true },
   whisperer: { fresh: '#333344', dried: '#111122', toxic: false },
   broodmother: { fresh: '#880044', dried: '#330011', toxic: true },
+  echo: { fresh: '#0097a7', dried: '#003840', toxic: false },
+  mirage: { fresh: '#c2185b', dried: '#4a0020', toxic: false },
+  conductor: { fresh: '#d84315', dried: '#4e1500', toxic: false },
+  hive: { fresh: '#5d4037', dried: '#1b0000', toxic: true },
 };
 
 export const ACOUSTIC_LABELS: Record<string, { label: string; description: string; color: string }> = {
@@ -780,3 +857,50 @@ export const ACOUSTIC_LABELS: Record<string, { label: string; description: strin
   absorb: { label: 'Absorción', description: 'Los sonidos se absorben, iluminación reducida', color: '#1a0033' },
   reflect: { label: 'Reflexión', description: 'Los sonidos rebotan, iluminación en múltiples direcciones', color: '#ffd600' },
 };
+
+// ---- Multiplayer ----
+export type MultiplayerRole = 'host' | 'client';
+
+export interface MultiplayerPlayer {
+  id: string;
+  name: string;
+  pos: Vec2;
+  dir: number;
+  health: number;
+  maxHealth: number;
+  isReady: boolean;
+  isAlive: boolean;
+  equippedWeapon: string | null;
+  isMoving: boolean;
+  isSneaking: boolean;
+  noiseLevel: number;
+  voiceEnabled: boolean;
+  videoEnabled: boolean;
+  ping: number;
+  color: string; // player color for identification
+}
+
+export interface MultiplayerRoom {
+  code: string;
+  hostId: string;
+  players: MultiplayerPlayer[];
+  difficulty: Difficulty;
+  chapter: number;
+  maxPlayers: number;
+  gameStarted: boolean;
+  createdAt: number;
+}
+
+export const PLAYER_COLORS = ['#00e5ff', '#76ff03', '#ff6d00', '#e040fb', '#ffd600'] as const;
+
+export interface MultiplayerConfig {
+  maxPlayers: number;
+  voiceChatEnabled: boolean;
+  videoChatEnabled: boolean;
+  friendlyFire: boolean;
+  sharedPulses: boolean; // all players see each other's pulses
+  proximityVoice: boolean; // voice volume based on distance
+  reviveEnabled: boolean; // can revive fallen teammates
+  reviveTime: number; // seconds to revive
+  separationDistance: number; // max distance players can be separated
+}

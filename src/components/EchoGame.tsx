@@ -9,6 +9,7 @@ import LevelEditor from './LevelEditor';
 import ParticleBackground from './ParticleBackground';
 import EchoMiniDemo from './EchoMiniDemo';
 import AudioDiary from './AudioDiary';
+import MultiplayerLobby from './MultiplayerLobby';
 
 // ============================================================
 // Hydration-safe hooks
@@ -88,6 +89,9 @@ export default function EchoGame() {
 
   // ---- Level Editor state ----
   const [showLevelEditor, setShowLevelEditor] = useState(false);
+
+  // ---- Multiplayer state ----
+  const [showMultiplayer, setShowMultiplayer] = useState(false);
 
   // ---- Mini Demo state ----
   const [showMiniDemo, setShowMiniDemo] = useState(false);
@@ -846,7 +850,7 @@ export default function EchoGame() {
                 ECHOES
               </h1>
               <h2 className="text-lg sm:text-2xl md:text-4xl font-mono tracking-[0.12em] sm:tracking-[0.2em] mb-1 sm:mb-2" style={{ color: '#0097a7' }}>OF THE STATIC</h2>
-              <div className="text-xs sm:text-sm font-mono opacity-40" style={{ color: '#004d40' }}>v3.0 — Ecos de la Estática</div>
+              <div className="text-xs sm:text-sm font-mono opacity-40" style={{ color: '#004d40' }}>v4.0 — Frecuencia Compartida</div>
             </div>
 
             {/* Improved Hook Text */}
@@ -945,10 +949,18 @@ export default function EchoGame() {
               <SoundWaveButton onClick={() => setShowLevelEditor(true)} dim isNew>
                 EDITOR DE NIVELES
               </SoundWaveButton>
+              <SoundWaveButton onClick={() => setShowMultiplayer(true)} color="#76ff03">
+                👥 MULTIJUGADOR
+              </SoundWaveButton>
             </div>
 
             {/* Quick Navigation to sections */}
             <div className="flex flex-wrap justify-center gap-2 mb-4">
+              <button onClick={() => document.getElementById('section-multiplayer')?.scrollIntoView({ behavior: 'smooth' })}
+                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95 animate-pulse"
+                style={{ color: '#76ff03', borderColor: 'rgba(118,255,3,0.4)', background: 'rgba(118,255,3,0.08)' }}>
+                👥 MULTIJUGADOR
+              </button>
               <button onClick={() => document.getElementById('section-noticias')?.scrollIntoView({ behavior: 'smooth' })}
                 className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95"
                 style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.3)', background: 'rgba(255,23,68,0.05)' }}>
@@ -1010,7 +1022,7 @@ export default function EchoGame() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
                 {[
                   { icon: '🔊', title: 'Ecolocalización', desc: 'Usa pulsos de sonido para revelar el mundo. Cada eco ilumina las paredes... y alerta a tus enemigos.', color: '#00e5ff' },
-                  { icon: '👹', title: '8 Monstruos Mortales', desc: 'Devorador, Abominación, Arácnida, Susurrador, Madre... y los originales. Cada uno con IA letal única.', color: '#ff1744' },
+                  { icon: '👹', title: '12 Monstruos Mortales', desc: '8 originales + 4 exclusivos multijugador: Eco, Espejismo, Conductor, Colmena. Cada uno con IA letal única.', color: '#ff1744' },
                   { icon: '⚔️', title: '10 Armas de Combate', desc: 'Pistola de Eco, Rifle Sónico, Escopeta de Pulso, Cañón de Éter... Destruye lo que te acecha.', color: '#ff6d00' },
                   { icon: '🔇', title: 'Zonas Silenciosas', desc: 'Áreas donde el sonido no existe. Tu ecolocalización no funciona. Sobrevive en el silencio absoluto.', color: '#9c27b0' },
                   { icon: '👥', title: 'Co-op Asimétrico', desc: 'El Oído ve el mapa. El Cuerpo se mueve. Coordínate con tu compañero para sobrevivir.', color: '#76ff03' },
@@ -1027,6 +1039,87 @@ export default function EchoGame() {
             </div>
           </section>
 
+          {/* ===== MULTIPLAYER SECTION ===== */}
+          <section id="section-multiplayer" className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,15,5,1) 50%, rgba(0,0,0,1) 100%)' }}>
+            <div className="max-w-4xl mx-auto">
+              <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#76ff03', textShadow: '0 0 20px rgba(118,255,3,0.3)' }}>
+                👥 FRECUENCIA COMPARTIDA
+              </h2>
+              <p className="font-mono text-[10px] sm:text-xs text-center mb-6 sm:mb-8" style={{ color: 'rgba(118,255,3,0.3)' }}>
+                Modo multijugador — v4.0 — Hasta 5 jugadores
+              </p>
+
+              {/* Main feature cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
+                <div className="p-4 sm:p-5 border-2 rounded-sm" style={{ borderColor: 'rgba(118,255,3,0.3)', background: 'rgba(118,255,3,0.04)' }}>
+                  <div className="text-2xl sm:text-3xl mb-2">🎮</div>
+                  <h3 className="font-mono text-sm sm:text-base font-bold mb-1" style={{ color: '#76ff03' }}>5 Jugadores en Tiempo Real</h3>
+                  <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                    Crea o únete a salas con código. Sincronización de posición, salud y enemigos en tiempo real vía Socket.io. El host controla la partida.
+                  </p>
+                </div>
+                <div className="p-4 sm:p-5 border-2 rounded-sm" style={{ borderColor: 'rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.04)' }}>
+                  <div className="text-2xl sm:text-3xl mb-2">📹</div>
+                  <h3 className="font-mono text-sm sm:text-base font-bold mb-1" style={{ color: '#00e5ff' }}>Videollamada y Voz Real</h3>
+                  <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                    WebRTC P2P directo entre jugadores. Micrófono y cámara opcionales. Voz por proximidad: cuanto más lejos, más bajo se escucha. Sin servidores intermedios.
+                  </p>
+                </div>
+                <div className="p-4 sm:p-5 border-2 rounded-sm" style={{ borderColor: 'rgba(255,23,68,0.3)', background: 'rgba(255,23,68,0.04)' }}>
+                  <div className="text-2xl sm:text-3xl mb-2">👹</div>
+                  <h3 className="font-mono text-sm sm:text-base font-bold mb-1" style={{ color: '#ff1744' }}>4 Monstruos Exclusivos</h3>
+                  <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                    El Eco imita jugadores muertos. El Espejismo crea ilusiones. El Conductor manipula sonidos. La Colmena se divide al ser herida. Terror cooperativo.
+                  </p>
+                </div>
+                <div className="p-4 sm:p-5 border-2 rounded-sm" style={{ borderColor: 'rgba(255,214,0,0.3)', background: 'rgba(255,214,0,0.04)' }}>
+                  <div className="text-2xl sm:text-3xl mb-2">⚡</div>
+                  <h3 className="font-mono text-sm sm:text-base font-bold mb-1" style={{ color: '#ffd600' }}>8 Dificultades + Revive</h3>
+                  <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                    Desde Turista (exploración tranquila) hasta Vacío (permadeath extremo). Resucita compañeros caídos. Juntos o separados: la estática no perdona.
+                  </p>
+                </div>
+              </div>
+
+              {/* Story preview */}
+              <div className="p-4 sm:p-6 border rounded-sm mb-4" style={{ borderColor: 'rgba(156,39,176,0.3)', background: 'rgba(156,39,176,0.05)' }}>
+                <h3 className="font-mono text-[10px] sm:text-xs tracking-widest mb-2" style={{ color: '#9c27b0' }}>📖 HISTORIA — CAPÍTULO 7</h3>
+                <p className="font-mono text-[10px] sm:text-xs leading-relaxed mb-2" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                  Cinco sujetos despiertan en la misma oscuridad. La estática conecta sus frecuencias, permitiéndose ver a través de los oídos de los demás. Pero la red también conecta a las entidades — ahora cazan en manada.
+                </p>
+                <p className="font-mono text-[9px] leading-relaxed italic" style={{ color: 'rgba(156,39,176,0.5)' }}>
+                  "El Proyecto Eco nunca fue para una sola persona. Fue diseñado para crear una red de consciencia compartida. Los sujetos que sobrevivieron juntos podían ver a través de los oídos de los demás. Pero la red también conectó a las entidades."
+                </p>
+              </div>
+
+              {/* 8 difficulties */}
+              <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2 mb-4">
+                {[
+                  { key: 'tourist', label: 'Turista', color: '#4caf50', desc: 'Exploración' },
+                  { key: 'easy', label: 'Fácil', color: '#8bc34a', desc: 'Tranquilo' },
+                  { key: 'medium', label: 'Medio', color: '#ffd600', desc: 'Equilibrado' },
+                  { key: 'hard', label: 'Difícil', color: '#ff9800', desc: 'Desafiante' },
+                  { key: 'extreme', label: 'Extremo', color: '#ff5722', desc: 'Brutal' },
+                  { key: 'nightmare', label: 'Pesadilla', color: '#e91e63', desc: 'Horror' },
+                  { key: 'impossible', label: 'Imposible', color: '#ff1744', desc: 'Sin piedad' },
+                  { key: 'void', label: 'Vacío', color: '#9c27b0', desc: 'Permadeath' },
+                ].map((d, i) => (
+                  <div key={d.key} className="text-center px-2 py-1 border rounded-sm" style={{ borderColor: `${d.color}20`, background: `${d.color}05` }}>
+                    <div className="font-mono text-[9px] sm:text-[10px] font-bold" style={{ color: d.color }}>{d.label}</div>
+                    <div className="font-mono text-[7px] sm:text-[8px]" style={{ color: 'rgba(255,255,255,0.2)' }}>{d.desc}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTA */}
+              <div className="text-center">
+                <button onClick={() => setShowMultiplayer(true)} className="font-mono text-xs sm:text-sm px-6 sm:px-8 py-2.5 sm:py-3 border-2 rounded transition-all hover:scale-105 active:scale-95" style={{ color: '#76ff03', borderColor: 'rgba(118,255,3,0.5)', background: 'rgba(118,255,3,0.1)', textShadow: '0 0 10px rgba(118,255,3,0.3)' }}>
+                  👥 JUGAR MULTIJUGADOR
+                </button>
+              </div>
+            </div>
+          </section>
+
           {/* ===== NOTICIAS (NEWS) SECTION ===== */}
           <section id="section-noticias" className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(10,0,0,1) 50%, rgba(0,0,0,1) 100%)' }}>
             <div className="max-w-4xl mx-auto">
@@ -1038,6 +1131,14 @@ export default function EchoGame() {
               </p>
               <div className="space-y-3 sm:space-y-4">
                 {[
+                  {
+                    date: '05 Mar 2026',
+                    tag: 'v4.0',
+                    tagColor: '#76ff03',
+                    title: 'Frecuencia Compartida — Multijugador con Voz y Vídeo',
+                    desc: 'Juega con hasta 5 personas en tiempo real. Videollamada y llamada de voz integradas con WebRTC P2P. 4 monstruos exclusivos: El Eco, El Espejismo, El Conductor, La Colmena. Capítulo 7 con historia cooperativa. 8 niveles de dificultad desde Turista hasta Vacío.',
+                    icon: '👥',
+                  },
                   {
                     date: '04 Mar 2026',
                     tag: 'ACTUALIZACIÓN',
@@ -1122,6 +1223,22 @@ export default function EchoGame() {
 
                 <div className="space-y-4 sm:space-y-6">
                   {[
+                    {
+                      version: 'v4.0',
+                      date: '05 Mar 2026',
+                      color: '#76ff03',
+                      title: 'Frecuencia Compartida',
+                      changes: [
+                        'Modo multijugador para hasta 5 jugadores en tiempo real',
+                        'Videollamada y llamada de voz integradas con WebRTC P2P',
+                        '4 monstruos exclusivos multijugador: Eco, Espejismo, Conductor, Colmena',
+                        'Capítulo 7: Frecuencia Compartida — historia multijugador',
+                        '8 niveles de dificultad: Turista → Vacío',
+                        'Chat en tiempo real entre jugadores',
+                        'Sistema de revive: rescata a compañeros caídos',
+                        'Voz por proximidad: el volumen depende de la distancia',
+                      ],
+                    },
                     {
                       version: 'v3.0',
                       date: '04 Mar 2026',
@@ -1381,7 +1498,7 @@ export default function EchoGame() {
                 <p>SPACE: Eco Activo | Clic: Eco Pasivo / Atacar</p>
                 <p>F: Atacar con arma equipada | R: Cambiar Sonar</p>
                 <p>E: Interactuar | 1-4: Inventario | Q: Usar | G: Soltar</p>
-                <p>⚔️ 10 armas | 👹 8 monstruos | 💀 ¡Que te persiguen!</p>
+                <p>⚔️ 10 armas | 👹 12 monstruos | 👥 5 jugadores | 💀 ¡Que te persigan!</p>
                 <p>🩸 Sangre real | ❤️‍🔥 Arrancan corazones | 💀 Desmembramiento</p>
               </div>
               <div className="mt-3 font-mono text-[9px] sm:text-[10px] opacity-20" style={{ color: '#0097a7' }}>🎧 Auriculares recomendados</div>
@@ -1392,7 +1509,7 @@ export default function EchoGame() {
           {/* ===== FOOTER ===== */}
           <footer className="relative z-10 py-6 px-6 text-center border-t" style={{ borderColor: 'rgba(0,229,255,0.05)' }}>
             <p className="font-mono text-[9px]" style={{ color: 'rgba(0,229,255,0.2)' }}>
-              ECHOES OF THE STATIC v3.0 — Ecos de la Estática
+              ECHOES OF THE STATIC v4.0 — Ecos de la Estática
             </p>
           </footer>
         </div>
@@ -2064,6 +2181,24 @@ export default function EchoGame() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ===== MULTIPLAYER LOBBY ===== */}
+      {showMultiplayer && (
+        <MultiplayerLobby
+          onClose={() => setShowMultiplayer(false)}
+          playerName={profile.playerName}
+          onStartGame={(room) => {
+            setShowMultiplayer(false);
+            // Start the multiplayer game
+            const eng = engineRef.current;
+            if (eng) {
+              eng.startGame(room.chapter, room.difficulty as Difficulty, false, 'none').then(() => {
+                setGameState('playing');
+              });
+            }
+          }}
+        />
       )}
 
       {/* ===== LEVEL EDITOR ===== */}
