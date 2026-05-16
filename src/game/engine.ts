@@ -4725,22 +4725,23 @@ export class EchoGameEngine {
       this.audio.playWin();
       this.audio.stopHeartbeat();
 
+      // Immediately set state to prevent checkWinCondition from firing again
+      this.state = 'won';
+
       // Unlock next chapter
       const nextChapter = this.currentChapter + 1;
       if (nextChapter <= CHAPTERS.length) {
         this.unlockedChapters.add(nextChapter);
       }
 
-      // Play chapter transition cinematic, then set state to 'won'
+      // Play chapter transition cinematic, then notify state change
       if (nextChapter <= CHAPTERS.length) {
         const transition = this.getChapterTransitionCinematic(this.currentChapter, nextChapter);
         this.playCinematic(transition, () => {
-          this.state = 'won';
           this.onStateChange?.('won');
         });
       } else {
-        // Last chapter - go straight to won
-        this.state = 'won';
+        // Last chapter - notify immediately
         this.onStateChange?.('won');
       }
     }

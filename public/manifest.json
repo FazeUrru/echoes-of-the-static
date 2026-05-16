@@ -1,7 +1,7 @@
 {
   "name": "Echoes of the Static — Ecos de la Estática",
-  "short_name": "Ecos",
-  "description": "Juego de terror auditivo en primera persona con ecolocación. 30 eventos, 35 desafíos, multijugador 5 jugadores, 12 monstruos, 10 armas.",
+  "short_name": "Ecos de la Estática",
+  "description": "Juego de terror auditivo en primera persona con ecolocalización. Usa el sonido para ver en la oscuridad, pero recuerda: ellos también escuchan. 30 eventos, 35 desafíos, multijugador hasta 5 jugadores, 12 monstruos, 10 armas, modo hardcore y sistema de gore dinámico. Desarrollado por IñakiTech.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
@@ -32,6 +32,11 @@
       "name": "Multijugador",
       "short_name": "Coop",
       "url": "/?action=multiplayer"
+    },
+    {
+      "name": "Eventos",
+      "short_name": "Misiones",
+      "url": "/?action=events"
     }
   ]
 }

@@ -367,6 +367,10 @@ export default function EchoGame() {
   const handleStart = useCallback(async (chapterId: number, diff: Difficulty, hardcore: boolean = false, role: CoopRole = 'none') => {
     const eng = engineRef.current;
     if (!eng) return;
+    setSelectedChapter(chapterId);
+    setDifficulty(diff);
+    setHardcoreMode(hardcore);
+    setCoopRole(role);
     await eng.startGame(chapterId, diff, hardcore, role);
     setGameState('chapterIntro');
     // After 3 seconds, transition to playing (unless on mobile where user taps)
@@ -898,20 +902,22 @@ export default function EchoGame() {
         </div>
       )}
 
-      {/* ===== EVENTS HUD (in-game, right side) ===== */}
+      {/* ===== EVENTS HUD (in-game, right side on desktop, left side on mobile to avoid pause button overlap) ===== */}
       {gameState === 'playing' && eventsSave && (
         <>
-          {/* Toggle button */}
-          <button className="absolute top-1 right-1 z-20 font-mono text-[8px] sm:text-[9px] px-2 py-1 rounded-sm border transition-all hover:scale-105 active:scale-95"
-            style={{ color: showEventsHud ? '#ff6d00' : '#555', borderColor: showEventsHud ? 'rgba(255,109,0,0.4)' : 'rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.5)' }}
-            onClick={() => setShowEventsHud(!showEventsHud)}>
+          {/* Toggle button — on mobile, position left to avoid overlap with pause button */}
+          <button className={`absolute z-20 font-mono text-[8px] sm:text-[9px] px-2 py-1 rounded-sm border transition-all hover:scale-105 active:scale-95 ${isMobile ? 'top-1 left-1' : 'top-1 right-1'}`}
+            style={{ color: showEventsHud ? '#ff6d00' : '#555', borderColor: showEventsHud ? 'rgba(255,109,0,0.4)' : 'rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.5)', minHeight: isMobile ? 32 : 24 }}
+            onClick={(e) => { e.stopPropagation(); setShowEventsHud(!showEventsHud); }}>
             🎯 {showEventsHud ? 'OCULTAR' : 'EVENTOS'}
           </button>
 
-          {/* Events panel */}
+          {/* Events panel — on mobile, position below the toggle button on the left */}
           {showEventsHud && (
-            <div className="absolute top-8 right-1 z-20 w-56 sm:w-64 max-h-80 overflow-y-auto p-2 border rounded-sm"
-              style={{ borderColor: 'rgba(255,109,0,0.3)', background: 'rgba(0,0,0,0.85)', scrollbarWidth: 'thin' }}>
+            <div className={`absolute z-20 w-56 sm:w-64 max-h-80 overflow-y-auto p-2 border rounded-sm ${isMobile ? 'top-9 left-1' : 'top-8 right-1'}`}
+              style={{ borderColor: 'rgba(255,109,0,0.3)', background: 'rgba(0,0,0,0.85)', scrollbarWidth: 'thin' }}
+              onClick={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}>
               <div className="font-mono text-[8px] sm:text-[9px] tracking-widest mb-1.5" style={{ color: '#ff6d00' }}>
                 🎯 EVENTOS ACTIVOS
               </div>
@@ -2033,8 +2039,14 @@ export default function EchoGame() {
 
           {/* ===== FOOTER ===== */}
           <footer className="relative z-10 py-6 px-6 text-center border-t" style={{ borderColor: 'rgba(0,229,255,0.05)' }}>
-            <p className="font-mono text-[9px]" style={{ color: 'rgba(0,229,255,0.2)' }}>
+            <p className="font-mono text-[9px] mb-1" style={{ color: 'rgba(0,229,255,0.2)' }}>
               ECHOES OF THE STATIC v5.0 — Ecos de la Estática
+            </p>
+            <p className="font-mono text-[8px] mb-0.5" style={{ color: 'rgba(0,229,255,0.15)' }}>
+              Desarrollado por IñakiTech — Juegos, Apps, Webs y Extensiones
+            </p>
+            <p className="font-mono text-[7px] italic" style={{ color: 'rgba(0,229,255,0.1)' }}>
+              &ldquo;Donde otros ven estática, nosotros escuchamos el futuro.&rdquo;
             </p>
           </footer>
         </div>

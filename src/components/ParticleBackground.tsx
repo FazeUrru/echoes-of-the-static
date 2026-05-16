@@ -61,28 +61,10 @@ export default function ParticleBackground() {
     resize();
     window.addEventListener('resize', resize);
 
-    const handleClick = (e: MouseEvent) => {
-      clickPulsesRef.current.push({
-        x: e.clientX,
-        y: e.clientY,
-        radius: 0,
-        maxRadius: 300,
-        alpha: 1,
-      });
-
-      // Chance to trigger monster silhouette
-      if (Math.random() < 0.3) {
-        silhouetteActiveRef.current = true;
-        silhouetteAlphaRef.current = 1;
-        silhouetteTimerRef.current = performance.now();
-      }
-    };
-
     const handleMouseMove = (e: MouseEvent) => {
       mouseRef.current = { x: e.clientX, y: e.clientY };
     };
 
-    canvas.addEventListener('click', handleClick);
     window.addEventListener('mousemove', handleMouseMove);
 
     const render = () => {
@@ -234,7 +216,6 @@ export default function ParticleBackground() {
     return () => {
       cancelAnimationFrame(animRef.current);
       window.removeEventListener('resize', resize);
-      canvas.removeEventListener('click', handleClick);
       window.removeEventListener('mousemove', handleMouseMove);
     };
   }, [initParticles]);
@@ -243,7 +224,7 @@ export default function ParticleBackground() {
     <canvas
       ref={canvasRef}
       className="particle-canvas absolute inset-0 w-full h-full"
-      style={{ zIndex: 0 }}
+      style={{ zIndex: 0, pointerEvents: 'none' }}
     />
   );
 }

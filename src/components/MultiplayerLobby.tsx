@@ -275,7 +275,11 @@ export default function MultiplayerLobby({ onClose, onStartGame, playerName }: P
   // RENDER
   // ============================================================
   return (
-    <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/95" style={{ backdropFilter: 'blur(8px)' }}>
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/95" style={{ backdropFilter: 'blur(8px)' }}
+      onClick={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}>
       <div className="w-full max-w-lg mx-4 flex flex-col max-h-[95dvh] overflow-hidden border rounded" style={{ borderColor: 'rgba(0,229,255,0.3)', backgroundColor: 'rgba(0,5,10,0.95)' }}>
         {/* Header */}
         <div className="flex items-center justify-between p-3 border-b" style={{ borderColor: 'rgba(0,229,255,0.2)' }}>

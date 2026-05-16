@@ -268,8 +268,8 @@ input[type="range"]::-moz-range-thumb {
   /* touch-action is set per-element instead */
 }
 
-/* Canvas touch handling */
-canvas {
+/* Canvas touch handling — only for game canvas, not background particles */
+canvas:not(.particle-canvas) {
   touch-action: none;
   -webkit-touch-callout: none;
 }

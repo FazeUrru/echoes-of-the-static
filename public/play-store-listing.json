@@ -1,0 +1,72 @@
+{
+  "playStoreListing": {
+    "appTitle": "Echoes of the Static — Ecos de la Estática",
+    "shortDescription": "Terror auditivo con ecolocalización. Usa el sonido para ver... pero ellos también escuchan.",
+    "fullDescription": "🔇 LA OSCURIDAD NO ES TU ENEMIGA. EL SILENCIO SÍ.\n\nEchoes of the Static (Ecos de la Estática) es un juego de terror en primera persona donde la ecolocalización es tu única herramienta para sobrevivir. Emite pulsos de sonido para revelar las paredes, los objetos y las entidades que te acechan en la oscuridad. Pero cada pulso que emites también les advierte de tu posición.\n\n🎮 MECÁNICAS PRINCIPALES\n\n🔊 Ecolocalización — Usa pulsos sónicos para revelar el mundo. Cada eco ilumina las paredes y muestra la posición de los monstruos. Pero cuidado: cada pulso también delata tu posición.\n\n👂 Audio Binaural Asimétrico — El sonido es direccional y espacial. Usa auriculares para detectar de dónde vienen los monstruos. Los susurros, los pasos y la estática son tus guías en la oscuridad.\n\n🔇 Zonas Silenciosas — Áreas donde el sonido no existe. Tu ecolocalización no funciona. Sobrevive en el silencio absoluto usando solo tu instinto.\n\n📡 Zonas de Ruido Blanco — Interferencia electromagnética que distorsiona tus sentidos y enmascara la presencia de las entidades.\n\n👹 12 MONSTRUOS MORTALES\n\n8 monstruos base con IA única de persecución:\n• El Acechador — Te sigue en silencio. Solo lo ves cuando emites un pulso.\n• El Espectro — Se desvanece y reaparece. Aparece donde menos te lo esperas.\n• El Gritón — Emite un grito que aturde y atrae a otras entidades.\n• El Devorador — Puede arrancarte el corazón mientras sigues vivo.\n• La Abominación — Se regenera con cada pulso que emites.\n• La Arácnida — Te atrapa en telarañas. Inmovilizado, solo te queda escuchar.\n• El Susurrador — Imita voces de otros sujetos del Proyecto Eco.\n• La Madre — Invoca crías que te persiguen en manada.\n\n4 monstruos exclusivos multijugador:\n• El Eco — Copia la apariencia de jugadores muertos.\n• El Espejismo — Crea ilusiones de sí mismo para confundirte.\n• El Conductor — Manipula los sonidos del entorno.\n• La Colmena — Se divide en entidades más pequeñas al ser herido.\n\n⚔️ 10 ARMAS SÓNICAS\n\nPistola de Eco, Rifle Sónico, Escopeta de Pulso, Cañón de Éter, Granada de Frecuencia, Cuchillo de Silencio, Arco de Ondas, Martillo de Resonancia, Látigo Acústico y el devastador Cañón de Éter Mejorado. Cada arma tiene daño, cadencia y munición únicos.\n\n👥 MULTIJUGADOR — FRECUENCIA COMPARTIDA (Hasta 5 jugadores)\n\n• Salas con código para unirte con amigos\n• Videollamada y voz real con WebRTC P2P directo\n• Voz por proximidad: el volumen depende de la distancia entre jugadores\n• Chat en tiempo real durante la partida\n• Sistema de revive: rescata a compañeros caídos\n• Capítulo 7 exclusivo: Frecuencia Compartida\n• Sincronización de posición, salud y enemigos vía Socket.io\n\n🎯 30 EVENTOS + 35 DESAFÍOS CON ROTACIÓN AUTOMÁTICA\n\n• 20 eventos semanales que rotan cada lunes\n• 10 eventos mensuales masivos que rotan cada 1º de mes\n• 25 desafíos semanales con bonus por racha consecutiva\n• 10 desafíos mensuales legendarios con recompensas masivas\n• 8 categorías: Supervivencia, Combate, Exploración, Velocidad, Sigilo, Multijugador, Hardcore, Gore\n• 5 niveles de dificultad: Fácil, Medio, Difícil, Extremo, Pesadilla\n• Lore exclusivo en eventos especiales\n• Sistema de puntos y rachas\n\n☠️ MODO HARDCORE — PERMADEATH\n\nUna sola vida. Sin HUD. Sin linterna. Solo audio binaural y tu instinto. Si mueres, pierdes todo el progreso. El auto-guardado está desactivado. No hay vuelta atrás.\n\n🩸 SISTEMA DE GORE DINÁMICO\n\nSangre real que fluye y forma charcos. Extracción de corazones por el Devorador. Desmembramiento de extremidades en combate. Indicadores de hemorragia y sangrado progresivo. Cada muerte es única y visceral.\n\n🎮 8 NIVELES DE DIFICULTAD\n\nDesde Turista (exploración tranquila) hasta Vacío (permadeath extremo). Turista, Fácil, Medio, Difícil, Extremo, Pesadilla, Imposible y Vacío.\n\n📖 HISTORIA — EL PROYECTO ECO\n\nDescubre el origen del Proyecto Eco y la catástrofe que silenci贸 al mundo. 7 capítulos con narrativa interactiva y cinemáticas. Diario de audio con fragmentos de los sujetos del experimento. Cada capítulo revela más sobre qué ocurrió en las instalaciones del Proyecto Eco.\n\n🎧 CONTROLES\n\n• Escritorio: WASD + Ratón + Hotkeys\n• Móvil: Joystick virtual + Botones táctiles optimizados\n• Micrófono opcional: tu voz genera ruido en el juego\n\n📱 OPTIMIZADO PARA MÓVIL\n\nControles táctiles completos con joystick virtual, botón de ataque con indicador de cooldown, y navegación por secciones con menú flotante. Experiencia FPS completa en tu dispositivo.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nDesarrollado por IñakiTech\n\nIñakiTech es una empresa en la que desarrollamos juegos, apps, páginas web y extensiones y nos comprometemos a mejorar al máximo la experiencia del usuario. Cada proyecto que emprendemos nace de la convicción de que la tecnología debe servir a las personas, no al revés. Innovamos sin perder la esencia humana, creando experiencias que conectan, que emocionan y que dejan huella. Nuestro compromiso con la excelencia no es una promesa, es una práctica constante de mejora, iteración y pasión por lo que hacemos.\n\n\"Donde otros ven estática, nosotros escuchamos el futuro.\"",
+    "developerName": "IñakiTech",
+    "developerEmail": "contacto@inakitech.com",
+    "developerWebsite": "https://inakitech.com",
+    "category": "GAME",
+    "subcategory": "GameAction",
+    "contentRating": "PEGI 18",
+    "contentRatingDescription": "Violencia gráfica extrema, desmembramiento, extracción de órganos, sangre realista y contenido de terror intenso. No recomendado para menores de 18 años ni personas sensibles al contenido gore.",
+    "tags": [
+      "horror",
+      "survival",
+      "audio",
+      "echolocation",
+      "first-person",
+      "multiplayer",
+      "indie",
+      "atmospheric",
+      "dark",
+      "gore",
+      "co-op",
+      "stealth"
+    ],
+    "screenshots": {
+      "phone": [
+        "screenshot-phone-1.png",
+        "screenshot-phone-2.png",
+        "screenshot-phone-3.png",
+        "screenshot-phone-4.png"
+      ],
+      "tablet": [
+        "screenshot-tablet-1.png",
+        "screenshot-tablet-2.png"
+      ]
+    },
+    "featureGraphic": "feature-graphic.png",
+    "icon": "icon-512.png",
+    "price": "FREE",
+    "inAppPurchases": false,
+    "containsAds": false,
+    "privacyPolicyUrl": "https://inakitech.com/privacy/echoes",
+    "supportUrl": "https://inakitech.com/support/echoes",
+    "releaseNotes": "v5.0 — Misiones y Desafíos: 30 eventos y 35 desafíos con rotación automática semanal y mensual. 8 categorías, 5 dificultades, bonus por racha. Multijugador con voz y vídeo WebRTC. 12 monstruos, 10 armas, modo hardcore, gore dinámico.",
+    "recentChanges": "🎯 30 Eventos + 35 Desafíos con rotación automática\n👥 Multijugador con voz y vídeo (WebRTC P2P)\n👹 12 monstruos con IA única de persecución\n⚔️ 10 armas sónicas\n☠️ Modo Hardcore (permadeath)\n🩸 Sistema de gore dinámico\n🎮 Controles móviles optimizados\n📖 Historia completa con cinemáticas"
+  },
+  "twatConfig": {
+    "packageName": "com.inakitech.echoesofthestatic",
+    "host": "echoes.inakitech.com",
+    "launchUrl": "/",
+    "themeColor": "#000000",
+    "navigationColor": "#000000",
+    "navigationDividerColor": "#00e5ff",
+    "backgroundColor": "#000000",
+    "enableNotifications": false,
+    "useBrowserOnChromeOS": true,
+    "splashScreenFadeOutDuration": 300,
+    "appVersionCode": 5,
+    "appVersionName": "5.0.0",
+    "minSdkVersion": 21,
+    "signingKey": {
+      "path": "signing-key.jks",
+      "alias": "inakitech"
+    },
+    "output": {
+      "apk": "echoes-of-the-static.apk",
+      "aab": "echoes-of-the-static.aab"
+    }
+  }
+}

@@ -2,7 +2,7 @@
   "relation": ["delegate_permission/common.handle_all_urls"],
   "target": {
     "namespace": "android_app",
-    "package_name": "com.echoesofthestatic.app",
+    "package_name": "com.inakitech.echoesofthestatic",
     "sha256_cert_fingerprints": [
       "PLACEHOLDER:ADD_YOUR_SIGNING_KEY_FINGERPRINT_HERE"
     ]
