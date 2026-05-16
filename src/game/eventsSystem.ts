@@ -504,3 +504,458 @@ export function getCategoryLabel(cat: EventCategory | ChallengeCategory): { labe
     case 'gore': return { label: 'Gore', icon: '🩸' };
   }
 }
+
+// ============================================================
+// PROGRESS TRACKING SYSTEM — Real in-game tracking
+// ============================================================
+
+export type TrackableStat = 
+  | 'kills' | 'stealthKills' | 'pulsesEmitted' | 'chaptersCompleted'
+  | 'chaptersCompletedNoDamage' | 'chaptersCompletedNoDetection'
+  | 'chaptersCompletedNoPulses' | 'chaptersCompletedNoFlashlight'
+  | 'chaptersCompletedPassiveOnly' | 'chaptersCompletedHardcore'
+  | 'chaptersCompletedVoid' | 'chaptersCompletedCoop' | 'chaptersConsecutiveNoDeath'
+  | 'damageDealt' | 'damageTaken' | 'survivalTime' | 'survivalTimeCritical'
+  | 'survivalTimeSilent' | 'survivalTimeHazard' | 'survivalTimeSilentZone'
+  | 'bloodPools' | 'dismemberments' | 'distanceTraveled' | 'runningTime'
+  | 'doorsOpened' | 'itemsCollected' | 'consumablesUsed'
+  | 'entitiesRevealedByPulse' | 'weaponsUsedForKills' | 'monthlyKills'
+  | 'monthlyDamageDealt' | 'micAttractions' | 'stealthKillsNoWeapon'
+  | 'devourerKills' | 'broodmotherKills' | 'revivesPerformed'
+  | 'weeklyChallengesCompleted';
+
+export interface EventProgress {
+  id: string;
+  currentValue: number;
+  completed: boolean;
+  completedAt: number | null; // timestamp
+  claimed: boolean; // reward claimed
+}
+
+export interface EventsSaveData {
+  version: number;
+  lastWeekNum: number;
+  lastMonthNum: number;
+  stats: Record<TrackableStat, number>;
+  eventProgress: Record<string, EventProgress>;
+  challengeProgress: Record<string, EventProgress>;
+  totalPoints: number;
+  weeklyStreak: number;
+  lastWeeklyCompletion: number | null;
+  completedEventIds: string[]; // all-time completed
+  completedChallengeIds: string[];
+}
+
+const EVENTS_SAVE_KEY = 'echoes_events';
+const EVENTS_VERSION = 1;
+
+export function getDefaultEventsSave(): EventsSaveData {
+  return {
+    version: EVENTS_VERSION,
+    lastWeekNum: 0,
+    lastMonthNum: 0,
+    stats: {
+      kills: 0, stealthKills: 0, pulsesEmitted: 0, chaptersCompleted: 0,
+      chaptersCompletedNoDamage: 0, chaptersCompletedNoDetection: 0,
+      chaptersCompletedNoPulses: 0, chaptersCompletedNoFlashlight: 0,
+      chaptersCompletedPassiveOnly: 0, chaptersCompletedHardcore: 0,
+      chaptersCompletedVoid: 0, chaptersCompletedCoop: 0, chaptersConsecutiveNoDeath: 0,
+      damageDealt: 0, damageTaken: 0, survivalTime: 0, survivalTimeCritical: 0,
+      survivalTimeSilent: 0, survivalTimeHazard: 0, survivalTimeSilentZone: 0,
+      bloodPools: 0, dismemberments: 0, distanceTraveled: 0, runningTime: 0,
+      doorsOpened: 0, itemsCollected: 0, consumablesUsed: 0,
+      entitiesRevealedByPulse: 0, weaponsUsedForKills: 0, monthlyKills: 0,
+      monthlyDamageDealt: 0, micAttractions: 0, stealthKillsNoWeapon: 0,
+      devourerKills: 0, broodmotherKills: 0, revivesPerformed: 0,
+      weeklyChallengesCompleted: 0,
+    },
+    eventProgress: {},
+    challengeProgress: {},
+    totalPoints: 0,
+    weeklyStreak: 0,
+    lastWeeklyCompletion: null,
+    completedEventIds: [],
+    completedChallengeIds: [],
+  };
+}
+
+export function loadEventsSave(): EventsSaveData {
+  try {
+    const raw = localStorage.getItem(EVENTS_SAVE_KEY);
+    if (!raw) return getDefaultEventsSave();
+    const data = JSON.parse(raw) as EventsSaveData;
+    if (data.version !== EVENTS_VERSION) return getDefaultEventsSave();
+    // Merge with defaults in case new stats were added
+    const def = getDefaultEventsSave();
+    return {
+      ...def,
+      ...data,
+      stats: { ...def.stats, ...data.stats },
+      eventProgress: { ...data.eventProgress },
+      challengeProgress: { ...data.challengeProgress },
+      completedEventIds: data.completedEventIds || [],
+      completedChallengeIds: data.completedChallengeIds || [],
+    };
+  } catch {
+    return getDefaultEventsSave();
+  }
+}
+
+export function saveEventsSave(data: EventsSaveData): void {
+  try {
+    localStorage.setItem(EVENTS_SAVE_KEY, JSON.stringify(data));
+  } catch { /* quota */ }
+}
+
+// ---- Stat Tracking ----
+
+export function incrementStat(data: EventsSaveData, stat: TrackableStat, amount: number = 1): EventsSaveData {
+  const newData = { ...data, stats: { ...data.stats } };
+  newData.stats[stat] = (newData.stats[stat] || 0) + amount;
+  return newData;
+}
+
+// ---- Map events to stats they track ----
+
+export function getRelevantStatsForEvent(event: GameEvent): TrackableStat[] {
+  const cat = event.category;
+  const id = event.id;
+  
+  // Specific event → stat mappings
+  if (id === 'evt_w_01') return ['survivalTimeSilent'];
+  if (id === 'evt_w_02') return ['pulsesEmitted'];
+  if (id === 'evt_w_03' || id === 'evt_m_02') return ['kills'];
+  if (id === 'evt_w_04') return ['chaptersCompleted']; // speed check done separately
+  if (id === 'evt_w_05') return ['stealthKills'];
+  if (id === 'evt_w_06') return ['chaptersCompletedNoPulses'];
+  if (id === 'evt_w_07') return ['runningTime'];
+  if (id === 'evt_w_08') return ['survivalTimeCritical'];
+  if (id === 'evt_w_09') return ['stealthKillsNoWeapon'];
+  if (id === 'evt_w_10') return ['pulsesEmitted']; // proxy for map reveal
+  if (id === 'evt_w_11') return ['distanceTraveled'];
+  if (id === 'evt_w_12') return ['survivalTimeHazard'];
+  if (id === 'evt_w_13' || id === 'evt_m_06') return ['damageDealt'];
+  if (id === 'evt_w_14') return ['chaptersCompletedPassiveOnly'];
+  if (id === 'evt_w_15') return ['chaptersCompletedNoDamage'];
+  if (id === 'evt_w_16') return ['weaponsUsedForKills'];
+  if (id === 'evt_w_17') return ['chaptersCompletedNoDetection'];
+  if (id === 'evt_w_18') return ['entitiesRevealedByPulse'];
+  if (id === 'evt_w_19') return ['kills']; // simplified for co-op
+  if (id === 'evt_w_20') return ['chaptersCompletedHardcore'];
+  if (id === 'evt_m_01') return ['chaptersConsecutiveNoDeath'];
+  if (id === 'evt_m_03') return ['pulsesEmitted']; // map exploration proxy
+  if (id === 'evt_m_04') return ['chaptersCompletedNoDetection'];
+  if (id === 'evt_m_05') return ['chaptersCompleted'];
+  if (id === 'evt_m_07') return ['chaptersCompletedCoop'];
+  if (id === 'evt_m_08') return ['chaptersCompletedHardcore'];
+  if (id === 'evt_m_09') return ['chaptersCompletedPassiveOnly'];
+  if (id === 'evt_m_10') return ['chaptersCompleted'];
+
+  // Fallback by category
+  switch (cat) {
+    case 'combat': return ['kills'];
+    case 'survival': return ['survivalTime'];
+    case 'exploration': return ['pulsesEmitted'];
+    case 'speed': return ['chaptersCompleted'];
+    case 'stealth': return ['stealthKills'];
+    case 'multiplayer': return ['kills'];
+    case 'hardcore': return ['chaptersCompletedHardcore'];
+    case 'gore': return ['bloodPools'];
+  }
+}
+
+export function getRelevantStatsForChallenge(ch: GameChallenge): TrackableStat[] {
+  const id = ch.id;
+  
+  if (id === 'ch_w_01') return ['chaptersCompleted'];
+  if (id === 'ch_w_02') return ['pulsesEmitted'];
+  if (id === 'ch_w_03') return ['stealthKills'];
+  if (id === 'ch_w_04') return ['survivalTime'];
+  if (id === 'ch_w_05') return ['kills'];
+  if (id === 'ch_w_06') return ['distanceTraveled'];
+  if (id === 'ch_w_07') return ['chaptersCompletedNoPulses'];
+  if (id === 'ch_w_08') return ['kills'];
+  if (id === 'ch_w_09') return ['consumablesUsed'];
+  if (id === 'ch_w_10') return ['pulsesEmitted'];
+  if (id === 'ch_w_11') return ['chaptersCompletedNoPulses'];
+  if (id === 'ch_w_12') return ['chaptersCompleted'];
+  if (id === 'ch_w_13') return ['bloodPools'];
+  if (id === 'ch_w_14') return ['dismemberments'];
+  if (id === 'ch_w_15') return ['chaptersCompletedCoop'];
+  if (id === 'ch_w_16') return ['chaptersCompleted'];
+  if (id === 'ch_w_17') return ['devourerKills'];
+  if (id === 'ch_w_18') return ['doorsOpened'];
+  if (id === 'ch_w_19') return ['chaptersCompletedNoFlashlight'];
+  if (id === 'ch_w_20') return ['micAttractions'];
+  if (id === 'ch_w_21') return ['survivalTimeSilentZone'];
+  if (id === 'ch_w_22') return ['revivesPerformed'];
+  if (id === 'ch_w_23') return ['itemsCollected'];
+  if (id === 'ch_w_24') return ['chaptersCompletedHardcore'];
+  if (id === 'ch_w_25') return ['broodmotherKills'];
+  if (id === 'ch_m_01') return ['chaptersConsecutiveNoDeath'];
+  if (id === 'ch_m_02') return ['monthlyKills'];
+  if (id === 'ch_m_03') return ['chaptersCompletedNoDetection'];
+  if (id === 'ch_m_04') return ['chaptersCompleted'];
+  if (id === 'ch_m_05') return ['weaponsUsedForKills'];
+  if (id === 'ch_m_06') return ['monthlyDamageDealt'];
+  if (id === 'ch_m_07') return ['chaptersCompletedCoop'];
+  if (id === 'ch_m_08') return ['chaptersCompletedVoid'];
+  if (id === 'ch_m_09') return ['pulsesEmitted'];
+  if (id === 'ch_m_10') return ['weeklyChallengesCompleted'];
+
+  return ['kills'];
+}
+
+// ---- Calculate progress for an event/challenge ----
+
+export function calculateProgress(id: string, stats: Record<TrackableStat, number>, isEvent: boolean): number {
+  const item = isEvent 
+    ? ALL_EVENTS.find(e => e.id === id)
+    : ALL_CHALLENGES.find(c => c.id === id);
+  if (!item) return 0;
+  
+  const relevantStats = isEvent 
+    ? getRelevantStatsForEvent(item as GameEvent) 
+    : getRelevantStatsForChallenge(item as GameChallenge);
+  
+  let total = 0;
+  for (const stat of relevantStats) {
+    total += (stats[stat] || 0);
+  }
+  return Math.min(total, item.targetValue);
+}
+
+// ---- Update progress and check completions ----
+
+export interface CompletionNotification {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  reward: number;
+  type: 'event' | 'challenge';
+  streakReward?: number;
+}
+
+export function updateAllProgress(data: EventsSaveData): { data: EventsSaveData; completions: CompletionNotification[] } {
+  const newData = { ...data, eventProgress: { ...data.eventProgress }, challengeProgress: { ...data.challengeProgress } };
+  const completions: CompletionNotification[] = [];
+
+  // Check active weekly events
+  const activeWeekly = getActiveWeeklyEvents(5);
+  const activeMonthly = getActiveMonthlyEvents(4);
+  const allActive = [...activeWeekly, ...activeMonthly];
+
+  for (const evt of allActive) {
+    const progress = calculateProgress(evt.id, newData.stats, true);
+    const existing = newData.eventProgress[evt.id];
+    
+    if (!existing || !existing.completed) {
+      const completed = progress >= evt.targetValue;
+      newData.eventProgress[evt.id] = {
+        id: evt.id,
+        currentValue: progress,
+        completed,
+        completedAt: completed ? Date.now() : null,
+        claimed: existing?.claimed || false,
+      };
+      
+      if (completed && (!existing || !existing.completed)) {
+        completions.push({
+          id: evt.id, name: evt.name, icon: evt.icon, color: evt.color,
+          reward: evt.reward, type: 'event',
+        });
+        if (!newData.completedEventIds.includes(evt.id)) {
+          newData.completedEventIds = [...newData.completedEventIds, evt.id];
+        }
+      }
+    }
+  }
+
+  // Check active challenges
+  const activeWeeklyCh = getActiveWeeklyChallenges(8);
+  const activeMonthlyCh = getActiveMonthlyChallenges(5);
+  const allActiveCh = [...activeWeeklyCh, ...activeMonthlyCh];
+
+  for (const ch of allActiveCh) {
+    const progress = calculateProgress(ch.id, newData.stats, false);
+    const existing = newData.challengeProgress[ch.id];
+    
+    if (!existing || !existing.completed) {
+      const completed = progress >= ch.targetValue;
+      newData.challengeProgress[ch.id] = {
+        id: ch.id,
+        currentValue: progress,
+        completed,
+        completedAt: completed ? Date.now() : null,
+        claimed: existing?.claimed || false,
+      };
+      
+      if (completed && (!existing || !existing.completed)) {
+        completions.push({
+          id: ch.id, name: ch.name, icon: ch.icon, color: ch.color,
+          reward: ch.reward, type: 'challenge', streakReward: ch.streakReward,
+        });
+        if (!newData.completedChallengeIds.includes(ch.id)) {
+          newData.completedChallengeIds = [...newData.completedChallengeIds, ch.id];
+        }
+        // Track weekly challenges completed (for monthly meta-challenge)
+        if (ch.frequency === 'weekly') {
+          newData.stats.weeklyChallengesCompleted = (newData.stats.weeklyChallengesCompleted || 0) + 1;
+        }
+      }
+    }
+  }
+
+  return { data: newData, completions };
+}
+
+// ---- Claim reward ----
+
+export function claimReward(data: EventsSaveData, id: string, isEvent: boolean): EventsSaveData {
+  const newData = { ...data };
+  const progress = isEvent ? newData.eventProgress[id] : newData.challengeProgress[id];
+  if (!progress || !progress.completed || progress.claimed) return data;
+  
+  const item = isEvent
+    ? ALL_EVENTS.find(e => e.id === id)
+    : ALL_CHALLENGES.find(c => c.id === id);
+  if (!item) return data;
+  
+  progress.claimed = true;
+  newData.totalPoints += item.reward;
+  
+  // Add streak reward for challenges
+  if (!isEvent && (item as GameChallenge).streakReward) {
+    const ch = item as GameChallenge;
+    if (ch.streakReward) {
+      newData.weeklyStreak = (newData.weeklyStreak || 0) + 1;
+      newData.totalPoints += ch.streakReward * newData.weeklyStreak;
+    }
+  }
+  
+  return newData;
+}
+
+// ---- Get progress info for display ----
+
+export function getEventProgressDisplay(data: EventsSaveData, id: string): { current: number; target: number; completed: boolean; claimed: boolean } {
+  const progress = data.eventProgress[id];
+  const item = ALL_EVENTS.find(e => e.id === id);
+  if (!item || !progress) return { current: 0, target: item?.targetValue || 1, completed: false, claimed: false };
+  return { current: progress.currentValue, target: item.targetValue, completed: progress.completed, claimed: progress.claimed };
+}
+
+export function getChallengeProgressDisplay(data: EventsSaveData, id: string): { current: number; target: number; completed: boolean; claimed: boolean } {
+  const progress = data.challengeProgress[id];
+  const item = ALL_CHALLENGES.find(c => c.id === id);
+  if (!item || !progress) return { current: 0, target: item?.targetValue || 1, completed: false, claimed: false };
+  return { current: progress.currentValue, target: item.targetValue, completed: progress.completed, claimed: progress.claimed };
+}
+
+// ---- Session stats (per-game-run, reset each game) ----
+
+export interface SessionStats {
+  kills: number;
+  stealthKills: number;
+  pulsesEmitted: number;
+  damageDealt: number;
+  damageTaken: number;
+  survivalTime: number;
+  survivalTimeCritical: number;
+  survivalTimeSilent: number;
+  survivalTimeHazard: number;
+  survivalTimeSilentZone: number;
+  bloodPools: number;
+  dismemberments: number;
+  distanceTraveled: number;
+  runningTime: number;
+  doorsOpened: number;
+  itemsCollected: number;
+  consumablesUsed: number;
+  entitiesRevealedByPulse: number;
+  weaponsUsedForKills: number;
+  micAttractions: number;
+  stealthKillsNoWeapon: number;
+  devourerKills: number;
+  broodmotherKills: number;
+  revivesPerformed: number;
+  usedPulse: boolean;
+  usedFlashlight: boolean;
+  usedPassiveOnly: boolean;
+  detectedByEntity: boolean;
+  ranAtAll: boolean;
+  usedCoop: boolean;
+  usedHardcore: boolean;
+  usedVoidDifficulty: boolean;
+  chapterCompleted: boolean;
+  chapterCompletedNoDamage: boolean;
+}
+
+export function getDefaultSessionStats(): SessionStats {
+  return {
+    kills: 0, stealthKills: 0, pulsesEmitted: 0, damageDealt: 0, damageTaken: 0,
+    survivalTime: 0, survivalTimeCritical: 0, survivalTimeSilent: 0,
+    survivalTimeHazard: 0, survivalTimeSilentZone: 0, bloodPools: 0,
+    dismemberments: 0, distanceTraveled: 0, runningTime: 0, doorsOpened: 0,
+    itemsCollected: 0, consumablesUsed: 0, entitiesRevealedByPulse: 0,
+    weaponsUsedForKills: 0, micAttractions: 0, stealthKillsNoWeapon: 0,
+    devourerKills: 0, broodmotherKills: 0, revivesPerformed: 0,
+    usedPulse: false, usedFlashlight: false, usedPassiveOnly: true,
+    detectedByEntity: false, ranAtAll: false, usedCoop: false,
+    usedHardcore: false, usedVoidDifficulty: false,
+    chapterCompleted: false, chapterCompletedNoDamage: true,
+  };
+}
+
+// Commit session stats to persistent data on chapter complete / game end
+export function commitSessionToSave(saveData: EventsSaveData, session: SessionStats, hardcore: boolean, voidDifficulty: boolean, coop: boolean): EventsSaveData {
+  let d = { ...saveData, stats: { ...saveData.stats } };
+  
+  d = incrementStat(d, 'kills', session.kills);
+  d = incrementStat(d, 'stealthKills', session.stealthKills);
+  d = incrementStat(d, 'pulsesEmitted', session.pulsesEmitted);
+  d = incrementStat(d, 'damageDealt', session.damageDealt);
+  d = incrementStat(d, 'damageTaken', session.damageTaken);
+  d = incrementStat(d, 'survivalTime', session.survivalTime);
+  d = incrementStat(d, 'survivalTimeCritical', session.survivalTimeCritical);
+  d = incrementStat(d, 'survivalTimeSilent', session.survivalTimeSilent);
+  d = incrementStat(d, 'survivalTimeHazard', session.survivalTimeHazard);
+  d = incrementStat(d, 'survivalTimeSilentZone', session.survivalTimeSilentZone);
+  d = incrementStat(d, 'bloodPools', session.bloodPools);
+  d = incrementStat(d, 'dismemberments', session.dismemberments);
+  d = incrementStat(d, 'distanceTraveled', session.distanceTraveled);
+  d = incrementStat(d, 'runningTime', session.runningTime);
+  d = incrementStat(d, 'doorsOpened', session.doorsOpened);
+  d = incrementStat(d, 'itemsCollected', session.itemsCollected);
+  d = incrementStat(d, 'consumablesUsed', session.consumablesUsed);
+  d = incrementStat(d, 'entitiesRevealedByPulse', session.entitiesRevealedByPulse);
+  d = incrementStat(d, 'weaponsUsedForKills', session.weaponsUsedForKills);
+  d = incrementStat(d, 'micAttractions', session.micAttractions);
+  d = incrementStat(d, 'stealthKillsNoWeapon', session.stealthKillsNoWeapon);
+  d = incrementStat(d, 'devourerKills', session.devourerKills);
+  d = incrementStat(d, 'broodmotherKills', session.broodmotherKills);
+  d = incrementStat(d, 'revivesPerformed', session.revivesPerformed);
+  d = incrementStat(d, 'monthlyKills', session.kills);
+  d = incrementStat(d, 'monthlyDamageDealt', session.damageDealt);
+  
+  // Chapter-level completions
+  if (session.chapterCompleted) {
+    d = incrementStat(d, 'chaptersCompleted', 1);
+    d = incrementStat(d, 'chaptersConsecutiveNoDeath', 1);
+    
+    if (session.chapterCompletedNoDamage) d = incrementStat(d, 'chaptersCompletedNoDamage', 1);
+    if (!session.detectedByEntity) d = incrementStat(d, 'chaptersCompletedNoDetection', 1);
+    if (!session.usedPulse) d = incrementStat(d, 'chaptersCompletedNoPulses', 1);
+    if (!session.usedFlashlight) d = incrementStat(d, 'chaptersCompletedNoFlashlight', 1);
+    if (session.usedPassiveOnly) d = incrementStat(d, 'chaptersCompletedPassiveOnly', 1);
+    if (hardcore) d = incrementStat(d, 'chaptersCompletedHardcore', 1);
+    if (voidDifficulty) d = incrementStat(d, 'chaptersCompletedVoid', 1);
+    if (coop) d = incrementStat(d, 'chaptersCompletedCoop', 1);
+  } else {
+    // Died - reset consecutive
+    d.stats.chaptersConsecutiveNoDeath = 0;
+  }
+  
+  return d;
+}

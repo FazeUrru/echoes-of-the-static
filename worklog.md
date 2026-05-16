@@ -12,24 +12,52 @@ Work Log:
   - 5 difficulty levels: easy, medium, hard, extreme, nightmare
   - Streak rewards for consecutive challenge completion
   - Lore text on special events
-  - Helper functions: getActiveWeeklyEvents, getActiveMonthlyEvents, getActiveWeeklyChallenges, getActiveMonthlyChallenges, getNextWeeklyReset, getNextMonthlyReset, formatTimeUntil, getDifficultyLabel, getCategoryLabel
+  - Helper functions for rotation, display, and progress tracking
 - Updated `/home/z/my-project/src/components/EchoGame.tsx`:
-  - Added import for eventsSystem
   - Added navigation buttons for 🎯 EVENTOS and 🏆 DESAFÍOS (with animate-pulse)
   - Added full Events section (section-eventos) with weekly and monthly events
   - Added full Challenges section (section-desafios) with weekly and monthly challenges
   - Added v5.0 version entry to version history timeline
   - Added news entry for v5.0
-  - Updated footer to v5.0
-  - Updated Features section with 2 new entries (Events+Challenges, Gore)
-  - Updated Controls Reference to mention events and challenges
+  - Updated footer, Features, Controls sections
+- All lint checks passing
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Make events and challenges actually functional with real tracking, in-game HUD, completion notifications, and persistent progress
+
+Work Log:
+- Extended `/home/z/my-project/src/game/eventsSystem.ts` with full progress tracking system:
+  - TrackableStat type with 30+ stats (kills, stealthKills, pulsesEmitted, chaptersCompleted, damageDealt, etc.)
+  - EventProgress interface with currentValue, completed, completedAt, claimed
+  - EventsSaveData interface with stats, eventProgress, challengeProgress, totalPoints, weeklyStreak
+  - loadEventsSave/saveEventsSave with localStorage persistence (key: echoes_events)
+  - SessionStats for per-game-run tracking (reset each game)
+  - getRelevantStatsForEvent/getRelevantStatsForChallenge: maps each event/challenge ID to the stats it tracks
+  - calculateProgress: computes current progress for any event/challenge
+  - updateAllProgress: checks all active events/challenges, detects completions, returns CompletionNotification[]
+  - claimReward: marks event as claimed, adds points + streak bonuses
+  - commitSessionToSave: commits session stats to persistent data on chapter complete/death
+- Updated `/home/z/my-project/src/components/EchoGame.tsx`:
+  - Added state: eventsSave, sessionStats, completionNotifications, showEventsHud
+  - Load eventsSave from localStorage on mount
+  - Session stats polling every 1s during gameplay (kills, pulses, damage, time, etc.)
+  - commitSession callback: commits session on chapter won/dead, updates progress, shows notifications
+  - Auto-dismiss completion notifications after 5s
+  - Periodic events save every 30s during gameplay
+  - In-game Events HUD: toggleable panel (🎯 button top-right) with progress bars for 5 events + 3 challenges
+  - Completion notification toasts: animated banners showing EVENTO/DESAFÍO COMPLETADO! with reward points
+  - Updated engine onStateChange to call commitSession on won/dead
+  - Updated landing page weekly events cards with progress bars and completion checkmarks
 - Ran `bun run lint` - passed with no errors
 - Dev server compiling correctly
 
 Stage Summary:
-- 30 events (20 weekly + 10 monthly) with auto-rotation
-- 35 challenges (25 weekly + 10 monthly) with auto-rotation and streak bonuses
-- Navigation buttons with pulse animation for new sections
-- Full landing page sections with countdown timers, category badges, difficulty badges
-- Version v5.0 entry in timeline and news
-- All lint checks passing
+- Real progress tracking: kills, pulses, damage, survival time, stealth kills, blood pools, etc.
+- Session stats committed to persistent storage on chapter complete or death
+- In-game HUD with toggleable Events panel showing live progress bars
+- Completion toast notifications with reward points and streak bonuses
+- Landing page event cards show real progress bars and ✅ when completed
+- All data persisted to localStorage (key: echoes_events)
+- Points system with streak multipliers for consecutive challenge completion

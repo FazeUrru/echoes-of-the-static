@@ -10,7 +10,7 @@ import ParticleBackground from './ParticleBackground';
 import EchoMiniDemo from './EchoMiniDemo';
 import AudioDiary from './AudioDiary';
 import MultiplayerLobby from './MultiplayerLobby';
-import { getActiveWeeklyEvents, getActiveMonthlyEvents, getActiveWeeklyChallenges, getActiveMonthlyChallenges, getNextWeeklyReset, getNextMonthlyReset, formatTimeUntil, getDifficultyLabel, getCategoryLabel, GameEvent, GameChallenge } from '@/game/eventsSystem';
+import { getActiveWeeklyEvents, getActiveMonthlyEvents, getActiveWeeklyChallenges, getActiveMonthlyChallenges, getNextWeeklyReset, getNextMonthlyReset, formatTimeUntil, getDifficultyLabel, getCategoryLabel, GameEvent, GameChallenge, loadEventsSave, saveEventsSave, updateAllProgress, commitSessionToSave, getDefaultSessionStats, SessionStats, EventsSaveData, CompletionNotification, getEventProgressDisplay, getChallengeProgressDisplay, claimReward } from '@/game/eventsSystem';
 
 // ============================================================
 // Hydration-safe hooks
@@ -93,6 +93,12 @@ export default function EchoGame() {
 
   // ---- Multiplayer state ----
   const [showMultiplayer, setShowMultiplayer] = useState(false);
+
+  // ---- Events & Challenges tracking state ----
+  const [eventsSave, setEventsSave] = useState<EventsSaveData | null>(null);
+  const [sessionStats, setSessionStats] = useState<SessionStats>(getDefaultSessionStats());
+  const [completionNotifications, setCompletionNotifications] = useState<CompletionNotification[]>([]);
+  const [showEventsHud, setShowEventsHud] = useState(false);
 
   // ---- Mini Demo state ----
   const [showMiniDemo, setShowMiniDemo] = useState(false);
@@ -193,9 +199,86 @@ export default function EchoGame() {
     return () => clearInterval(interval);
   }, []);
 
+  // ---- Events tracking: poll engine stats & update session ----
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const eng = engineRef.current;
+      if (eng && eng.state === 'playing') {
+        setSessionStats(prev => ({
+          ...prev,
+          kills: eng.killCount || 0,
+          pulsesEmitted: (prev.pulsesEmitted + (eng._lastPulseCount !== undefined ? Math.max(0, (eng.pulseCount || 0) - eng._lastPulseCount) : 0)),
+          damageDealt: eng.totalDamageDealt || 0,
+          damageTaken: eng.totalDamageTaken || 0,
+          survivalTime: Math.floor(playTimeRef.current),
+          bloodPools: eng.bloodPools?.length || 0,
+          dismemberments: prev.dismemberments,
+          usedPulse: prev.usedPulse || (eng.pulseCount || 0) > 0,
+          usedFlashlight: prev.usedFlashlight || eng.player.flashlightOn,
+          usedPassiveOnly: prev.usedPassiveOnly && eng.sonarMode === 'passive',
+          chapterCompletedNoDamage: prev.chapterCompletedNoDamage && (eng.totalDamageTaken || 0) === 0,
+        }));
+        // Store last pulse count for delta calculation
+        eng._lastPulseCount = eng.pulseCount || 0;
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ---- Events: commit session on chapter complete / death ----
+  const commitSession = useCallback((completed: boolean) => {
+    if (!eventsSave) return;
+    const session = { ...sessionStats, chapterCompleted: completed, chapterCompletedNoDamage: completed && sessionStats.chapterCompletedNoDamage };
+    const hardcore = engineRef.current?.hardcoreMode || false;
+    const voidDifficulty = engineRef.current?.difficulty === 'void';
+    const coop = engineRef.current?.coopRole !== 'none';
+    
+    let updatedSave = commitSessionToSave(eventsSave, session, hardcore, voidDifficulty, coop);
+    const result = updateAllProgress(updatedSave);
+    updatedSave = result.data;
+    
+    setEventsSave(updatedSave);
+    saveEventsSave(updatedSave);
+    
+    // Show completion notifications
+    if (result.completions.length > 0) {
+      setCompletionNotifications(prev => [...prev, ...result.completions]);
+    }
+    
+    // Reset session for next game
+    setSessionStats(getDefaultSessionStats());
+  }, [eventsSave, sessionStats]);
+
+  // Auto-dismiss completion notifications
+  useEffect(() => {
+    if (completionNotifications.length > 0) {
+      const timer = setTimeout(() => {
+        setCompletionNotifications(prev => prev.slice(1));
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [completionNotifications]);
+
+  // Periodic save of events progress during gameplay
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (eventsSave && gameState === 'playing') {
+        const updated = updateAllProgress(eventsSave);
+        if (updated.completions.length > 0) {
+          setCompletionNotifications(prev => [...prev, ...updated.completions]);
+        }
+        setEventsSave(updated.data);
+        saveEventsSave(updated.data);
+      }
+    }, 30000); // every 30 seconds
+    return () => clearInterval(interval);
+  }, [eventsSave, gameState]);
+
   // ---- Check for crash recovery on mount ----
   useEffect(() => {
     setCrashRecoveryAvailable(hasCrashRecovery());
+    // Load events save data
+    setEventsSave(loadEventsSave());
   }, []);
 
   // ---- Update autosave time display periodically ----
@@ -284,6 +367,11 @@ export default function EchoGame() {
       if (state === 'won') {
         const nextChapter = Math.min(eng.currentChapter + 1, 6);
         setUnlockedChapters(prev => Math.max(prev, nextChapter));
+        // Commit session stats on chapter completion
+        commitSession(true);
+      } else if (state === 'dead' || state === 'permanentDeath') {
+        // Commit session stats on death
+        commitSession(false);
       }
     };
     engineRef.current = eng;
@@ -779,6 +867,101 @@ export default function EchoGame() {
           <div style={{ color: '#ffd600' }}>👹 {engineLiveState.enemiesRemaining} remaining</div>
           {engineLiveState.bloodPoolCount > 0 && <div style={{ color: '#8b0000' }}>🩸 {engineLiveState.bloodPoolCount} sangre</div>}
           {engineLiveState.bodyPartCount > 0 && <div style={{ color: '#660000' }}>💀 {engineLiveState.bodyPartCount} restos</div>}
+        </div>
+      )}
+
+      {/* ===== EVENTS HUD (in-game, right side) ===== */}
+      {gameState === 'playing' && eventsSave && (
+        <>
+          {/* Toggle button */}
+          <button className="absolute top-1 right-1 z-20 font-mono text-[8px] sm:text-[9px] px-2 py-1 rounded-sm border transition-all hover:scale-105 active:scale-95"
+            style={{ color: showEventsHud ? '#ff6d00' : '#555', borderColor: showEventsHud ? 'rgba(255,109,0,0.4)' : 'rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.5)' }}
+            onClick={() => setShowEventsHud(!showEventsHud)}>
+            🎯 {showEventsHud ? 'OCULTAR' : 'EVENTOS'}
+          </button>
+
+          {/* Events panel */}
+          {showEventsHud && (
+            <div className="absolute top-8 right-1 z-20 w-56 sm:w-64 max-h-80 overflow-y-auto p-2 border rounded-sm"
+              style={{ borderColor: 'rgba(255,109,0,0.3)', background: 'rgba(0,0,0,0.85)', scrollbarWidth: 'thin' }}>
+              <div className="font-mono text-[8px] sm:text-[9px] tracking-widest mb-1.5" style={{ color: '#ff6d00' }}>
+                🎯 EVENTOS ACTIVOS
+              </div>
+              <div className="space-y-1.5">
+                {[...getActiveWeeklyEvents(5), ...getActiveMonthlyEvents(4)].slice(0, 5).map(evt => {
+                  const prog = getEventProgressDisplay(eventsSave, evt.id);
+                  const pct = prog.target > 0 ? Math.min(100, Math.round((prog.current / prog.target) * 100)) : 0;
+                  return (
+                    <div key={evt.id} className="p-1.5 border rounded-sm" style={{ borderColor: `${evt.color}15`, background: prog.completed ? `${evt.color}10` : 'rgba(0,0,0,0.3)' }}>
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <span className="text-xs">{evt.icon}</span>
+                        <span className="font-mono text-[7px] sm:text-[8px] font-bold truncate" style={{ color: prog.completed ? evt.color : 'rgba(255,255,255,0.5)' }}>
+                          {evt.name}
+                        </span>
+                        {prog.completed && <span className="text-[7px]">✅</span>}
+                      </div>
+                      <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: prog.completed ? evt.color : `${evt.color}80`, boxShadow: prog.completed ? `0 0 6px ${evt.color}` : 'none' }} />
+                      </div>
+                      <div className="font-mono text-[6px] sm:text-[7px] mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                        {prog.current}/{prog.target} {evt.targetUnit} ({pct}%)
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="font-mono text-[7px] sm:text-[8px] tracking-widest mt-1.5 pt-1.5 border-t" style={{ color: '#e040fb', borderColor: 'rgba(224,64,251,0.2)' }}>
+                🏆 DESAFÍOS
+              </div>
+              <div className="space-y-1.5">
+                {getActiveWeeklyChallenges(3).map(ch => {
+                  const prog = getChallengeProgressDisplay(eventsSave, ch.id);
+                  const pct = prog.target > 0 ? Math.min(100, Math.round((prog.current / prog.target) * 100)) : 0;
+                  return (
+                    <div key={ch.id} className="p-1.5 border rounded-sm" style={{ borderColor: `${ch.color}15`, background: prog.completed ? `${ch.color}10` : 'rgba(0,0,0,0.3)' }}>
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <span className="text-xs">{ch.icon}</span>
+                        <span className="font-mono text-[7px] sm:text-[8px] font-bold truncate" style={{ color: prog.completed ? ch.color : 'rgba(255,255,255,0.5)' }}>
+                          {ch.name}
+                        </span>
+                        {prog.completed && <span className="text-[7px]">✅</span>}
+                      </div>
+                      <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: prog.completed ? ch.color : `${ch.color}80` }} />
+                      </div>
+                      <div className="font-mono text-[6px] sm:text-[7px] mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                        {prog.current}/{prog.target} {ch.targetUnit} ({pct}%)
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="font-mono text-[6px] sm:text-[7px] text-center mt-2" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                💰 {eventsSave.totalPoints} pts | 🔥 Racha: {eventsSave.weeklyStreak}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ===== COMPLETION NOTIFICATIONS (toast) ===== */}
+      {completionNotifications.length > 0 && (
+        <div className="absolute top-14 sm:top-20 left-1/2 -translate-x-1/2 z-30 space-y-2 pointer-events-none">
+          {completionNotifications.slice(0, 3).map((notif, i) => (
+            <div key={`${notif.id}-${i}`} className="px-4 py-2 border-2 rounded-sm animate-bounce font-mono text-center"
+              style={{
+                borderColor: notif.color,
+                background: 'rgba(0,0,0,0.9)',
+                color: notif.color,
+                textShadow: `0 0 10px ${notif.color}`,
+                boxShadow: `0 0 20px ${notif.color}40`,
+                animation: 'fadeInUp 0.5s ease-out',
+              }}>
+              <div className="text-sm sm:text-base">{notif.icon} ¡{notif.type === 'event' ? 'EVENTO' : 'DESAFÍO'} COMPLETADO!</div>
+              <div className="text-[10px] sm:text-xs font-bold">{notif.name}</div>
+              <div className="text-[9px] sm:text-[10px]" style={{ color: '#ffd600' }}>+{notif.reward} pts{notif.streakReward ? ` 🔥 +${notif.streakReward} racha` : ''}</div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -1559,8 +1742,10 @@ export default function EchoGame() {
                   {getActiveWeeklyEvents(5).map((evt) => {
                     const diffInfo = getDifficultyLabel(evt.difficulty);
                     const catInfo = getCategoryLabel(evt.category);
+                    const prog = eventsSave ? getEventProgressDisplay(eventsSave, evt.id) : null;
+                    const pct = prog ? (prog.target > 0 ? Math.min(100, Math.round((prog.current / prog.target) * 100)) : 0) : 0;
                     return (
-                      <div key={evt.id} className="p-3 sm:p-4 border rounded-sm group hover:border-opacity-60 transition-all duration-300" style={{ borderColor: `${evt.color}20`, background: `${evt.color}03` }}>
+                      <div key={evt.id} className="p-3 sm:p-4 border rounded-sm group hover:border-opacity-60 transition-all duration-300" style={{ borderColor: prog?.completed ? `${evt.color}50` : `${evt.color}20`, background: prog?.completed ? `${evt.color}08` : `${evt.color}03` }}>
                         <div className="flex items-start gap-2 sm:gap-3">
                           <div className="text-xl sm:text-2xl mt-0.5 shrink-0">{evt.icon}</div>
                           <div className="flex-1 min-w-0">
@@ -1574,12 +1759,18 @@ export default function EchoGame() {
                               <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.3)' }}>
                                 +{evt.reward} pts
                               </span>
+                              {prog?.completed && <span className="font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm" style={{ color: '#76ff03', backgroundColor: 'rgba(118,255,3,0.1)', border: '1px solid rgba(118,255,3,0.3)' }}>✅</span>}
                             </div>
                             <h4 className="font-mono text-[10px] sm:text-xs font-bold mb-0.5" style={{ color: evt.color }}>{evt.name}</h4>
                             <p className="font-mono text-[8px] sm:text-[10px] leading-relaxed mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>{evt.description}</p>
-                            <div className="font-mono text-[8px] sm:text-[9px] font-bold" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                              🎯 {evt.objective}: {evt.targetValue} {evt.targetUnit}
+                            <div className="font-mono text-[8px] sm:text-[9px] font-bold mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                              🎯 {evt.objective}: {prog ? `${prog.current}/${prog.target}` : evt.targetValue} {evt.targetUnit}
                             </div>
+                            {prog && (
+                              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: prog.completed ? evt.color : `${evt.color}80`, boxShadow: prog.completed ? `0 0 6px ${evt.color}` : 'none' }} />
+                              </div>
+                            )}
                             {evt.loreText && (
                               <p className="font-mono text-[7px] sm:text-[8px] leading-relaxed italic mt-1 opacity-0 group-hover:opacity-60 transition-opacity duration-300" style={{ color: evt.color }}>
                                 &ldquo;{evt.loreText}&rdquo;
