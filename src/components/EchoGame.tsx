@@ -967,6 +967,351 @@ export default function EchoGame() {
             </div>
           </section>
 
+          {/* ===== NOTICIAS (NEWS) SECTION ===== */}
+          <section className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(10,0,0,1) 50%, rgba(0,0,0,1) 100%)' }}>
+            <div className="max-w-4xl mx-auto">
+              <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#ff1744', textShadow: '0 0 20px rgba(255,23,68,0.3)' }}>
+                📰 NOTICIAS
+              </h2>
+              <p className="font-mono text-[10px] sm:text-xs text-center mb-6 sm:mb-8" style={{ color: 'rgba(255,23,68,0.3)' }}>
+                Últimas actualizaciones del Proyecto Eco
+              </p>
+              <div className="space-y-3 sm:space-y-4">
+                {[
+                  {
+                    date: '04 Mar 2026',
+                    tag: 'ACTUALIZACIÓN',
+                    tagColor: '#76ff03',
+                    title: 'Sistema de Gore y Desmembramiento Implementado',
+                    desc: 'La sangre ahora es real. Los monstruos pueden arrancarte el corazón mientras sigues vivo. Sangre dinámica que fluye por el suelo, charcos que crecen, extremidades que caen. Cada muerte es única y visceral. El Devorador ahora tiene animación de extracción de corazón.',
+                    icon: '🩸',
+                  },
+                  {
+                    date: '02 Mar 2026',
+                    tag: 'NUEVO',
+                    tagColor: '#00e5ff',
+                    title: '5 Nuevos Monstruos y 10 Armas Añadidas',
+                    desc: 'El Devorador, La Abominación, La Arácnida, El Susurrador y La Madre se unen a la oscuridad. 10 armas sónicas para defenderte: desde la Pistola de Eco hasta el devastador Cañón de Éter. Cada monstruo tiene IA única y ataques especiales.',
+                    icon: '👹',
+                  },
+                  {
+                    date: '28 Feb 2026',
+                    tag: 'MEJORA',
+                    tagColor: '#ffd600',
+                    title: 'Controles Móviles Optimizados',
+                    desc: 'Nuevo joystick virtual con movimiento WASD real. El lado izquierdo controla movimiento, el derecho controla la cámara. Botón de ataque táctil con indicador de cooldown. Experiencia FPS completa en móvil.',
+                    icon: '📱',
+                  },
+                  {
+                    date: '22 Feb 2026',
+                    tag: 'HISTORIA',
+                    tagColor: '#9c27b0',
+                    title: 'Cinemática de Historia Completa',
+                    desc: 'Descubre el origen del Proyecto Eco y la catástrofe que silenció el mundo. La cinemática completa de la historia ya está disponible desde el menú principal. 5 capítulos de narrativa interactiva.',
+                    icon: '📖',
+                  },
+                  {
+                    date: '15 Feb 2026',
+                    tag: 'EVENTO',
+                    tagColor: '#ff6d00',
+                    title: 'Semana del Horror — Modo Hardcore Gratis',
+                    desc: 'Por tiempo limitado, el modo Hardcore está disponible sin desbloqueo. Una sola vida, sin HUD, sin linterna. Solo tú y el sonido binaural. ¿Sobrevivirás la noche?',
+                    icon: '☠️',
+                  },
+                  {
+                    date: '08 Feb 2026',
+                    tag: 'COMUNIDAD',
+                    tagColor: '#00e5ff',
+                    title: 'Editor de Niveles — Crea Tu Propio Infierno',
+                    desc: 'El editor de niveles ya está disponible. Crea laberintos, coloca monstruos, define zonas silenciosas y comparte tus niveles con la comunidad. Tu pesadilla, tus reglas.',
+                    icon: '🗺️',
+                  },
+                ].map((news, i) => (
+                  <div key={i} className="p-3 sm:p-5 border rounded-sm group hover:border-opacity-60 transition-all duration-300" style={{ borderColor: `${news.tagColor}20`, background: `${news.tagColor}03` }}>
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="text-xl sm:text-2xl mt-0.5 shrink-0">{news.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1 sm:mb-1.5">
+                          <span className="font-mono text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-sm" style={{ color: news.tagColor, backgroundColor: `${news.tagColor}15`, border: `1px solid ${news.tagColor}30` }}>
+                            {news.tag}
+                          </span>
+                          <span className="font-mono text-[8px] sm:text-[9px]" style={{ color: '#555' }}>{news.date}</span>
+                        </div>
+                        <h3 className="font-mono text-[11px] sm:text-sm font-bold mb-1 sm:mb-1.5" style={{ color: news.tagColor }}>{news.title}</h3>
+                        <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>{news.desc}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ===== HISTÓRICO DE VERSIONES SECTION ===== */}
+          <section className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,5,15,1) 50%, rgba(0,0,0,1) 100%)' }}>
+            <div className="max-w-3xl mx-auto">
+              <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>
+                📋 HISTÓRICO DE VERSIONES
+              </h2>
+              <p className="font-mono text-[10px] sm:text-xs text-center mb-6 sm:mb-8" style={{ color: 'rgba(0,229,255,0.3)' }}>
+                Registro de cambios desde el inicio del Proyecto Eco
+              </p>
+              <div className="relative">
+                {/* Timeline line */}
+                <div className="absolute left-3 sm:left-5 top-0 bottom-0 w-px" style={{ background: 'linear-gradient(180deg, rgba(0,229,255,0.4), rgba(0,229,255,0.05))' }} />
+
+                <div className="space-y-4 sm:space-y-6">
+                  {[
+                    {
+                      version: 'v3.0',
+                      date: '04 Mar 2026',
+                      color: '#ff1744',
+                      title: 'Sangre y Viscera',
+                      changes: [
+                        'Sistema de gore dinámico: sangre real que fluye y forma charcos',
+                        'Mecánica de extracción de corazón: el Devorador puede arrancarte el corazón',
+                        'Desmembramiento de extremidades en combate',
+                        'Indicadores de hemorragia y sangrado progresivo',
+                        'Charcos de sangre que crecen con el tiempo',
+                        'Restos y partes del cuerpo persistentes en el mapa',
+                        'Efectos visuales de daño visceral en pantalla',
+                      ],
+                    },
+                    {
+                      version: 'v2.5',
+                      date: '02 Mar 2026',
+                      color: '#ff6d00',
+                      title: 'Los Que Acechan',
+                      changes: [
+                        '5 nuevos monstruos con IA única: Devorador, Abominación, Arácnida, Susurrador, Madre',
+                        '10 armas sónicas con sistema de combate completo',
+                        'Mecánica de persecución: los monstruos te detectan por sonido y te persiguen',
+                        'Efectos de estado: atrapado por telarañas, paralizado por la mirada',
+                        'HUD de armas con indicador de munición y cooldown',
+                        'Botón de ataque táctil para móvil',
+                        'Estadísticas de combate: kills, daño, enemigos restantes',
+                      ],
+                    },
+                    {
+                      version: 'v2.0',
+                      date: '28 Feb 2026',
+                      color: '#76ff03',
+                      title: 'Conexión y Supervivencia',
+                      changes: [
+                        'Sistema de guardado automático cada 60 segundos',
+                        'Copias de seguridad con 3 slots + exportar/importar',
+                        'Recuperación de crash: nunca pierdas tu partida',
+                        'Controles móviles optimizados con joystick virtual',
+                        'Co-op asimétrico: modo Oído y modo Cuerpo',
+                        'Sistema de ping cooperativo para comunicación',
+                        'Micrófono: tu voz genera ruido en el juego',
+                      ],
+                    },
+                    {
+                      version: 'v1.5',
+                      date: '22 Feb 2026',
+                      color: '#9c27b0',
+                      title: 'La Historia Emergente',
+                      changes: [
+                        'Cinemática completa de la historia del Proyecto Eco',
+                        '5 capítulos con narrativa interactiva',
+                        'Diario de audio con fragmentos lore',
+                        'Tráiler in-game con vista previa animada',
+                        'Modo Hardcore: una vida, sin HUD, solo audio binaural',
+                        'Editor de niveles: crea y comparte laberintos',
+                        'Sistema de personajes desbloqueables',
+                      ],
+                    },
+                    {
+                      version: 'v1.0',
+                      date: '15 Feb 2026',
+                      color: '#00e5ff',
+                      title: 'El Eco Inicial',
+                      changes: [
+                        'Motor de raycasting first-person',
+                        'Sistema de ecolocalización: pulsos de sonido revelan el entorno',
+                        'Monstruos básicos con IA de patrulla',
+                        'Zonas silenciosas: la ecolocalización no funciona',
+                        'Modo pasivo y activo de sonar',
+                        'Zonas de ruido blanco: interferencia aleatoria',
+                        'Peligros ambientales: tóxico, eléctrico, colapsos',
+                        '3 niveles de dificultad: Fácil, Normal, Difícil',
+                      ],
+                    },
+                    {
+                      version: 'v0.5',
+                      date: '08 Feb 2026',
+                      color: '#555',
+                      title: 'Prototipo Alpha',
+                      changes: [
+                        'Demo técnica de ecolocalización',
+                        'Movimiento básico WASD + ratón',
+                        'Paredes y mapa básico renderizado',
+                        'Pulso de sonido visual',
+                        'Prueba de concepto de audio binaural',
+                      ],
+                    },
+                  ].map((ver, i) => (
+                    <div key={i} className="relative pl-8 sm:pl-12">
+                      {/* Timeline dot */}
+                      <div className="absolute left-1 sm:left-3 top-1 w-3 h-3 sm:w-4 sm:h-4 rounded-full border-2" style={{ borderColor: ver.color, backgroundColor: i === 0 ? ver.color : 'transparent', boxShadow: i === 0 ? `0 0 8px ${ver.color}` : 'none' }} />
+
+                      <div className="p-3 sm:p-4 border rounded-sm" style={{ borderColor: `${ver.color}15`, background: `${ver.color}03` }}>
+                        <div className="flex flex-wrap items-baseline gap-2 mb-2">
+                          <span className="font-mono text-sm sm:text-lg font-bold" style={{ color: ver.color }}>{ver.version}</span>
+                          <span className="font-mono text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded-sm" style={{ color: ver.color, backgroundColor: `${ver.color}10`, border: `1px solid ${ver.color}25` }}>
+                            {ver.date}
+                          </span>
+                          {i === 0 && (
+                            <span className="animate-pulse font-mono text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ff1744', backgroundColor: 'rgba(255,23,68,0.1)', border: '1px solid rgba(255,23,68,0.3)' }}>
+                              ACTUAL
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-mono text-[11px] sm:text-sm font-bold mb-2" style={{ color: ver.color, opacity: 0.8 }}>{ver.title}</h3>
+                        <ul className="space-y-1">
+                          {ver.changes.map((change, j) => (
+                            <li key={j} className="font-mono text-[8px] sm:text-[11px] leading-relaxed flex items-start gap-1.5" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                              <span className="shrink-0 mt-0.5" style={{ color: `${ver.color}60` }}>▸</span>
+                              {change}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ===== AVISOS (NOTICES) SECTION ===== */}
+          <section className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(15,0,0,1) 50%, rgba(0,0,0,1) 100%)' }}>
+            <div className="max-w-3xl mx-auto">
+              <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#ffd600', textShadow: '0 0 20px rgba(255,214,0,0.3)' }}>
+                ⚠️ AVISOS
+              </h2>
+              <p className="font-mono text-[10px] sm:text-xs text-center mb-6 sm:mb-8" style={{ color: 'rgba(255,214,0,0.3)' }}>
+                Información importante y advertencias del Proyecto Eco
+              </p>
+              <div className="space-y-3 sm:space-y-4">
+                {/* CRITICAL WARNING */}
+                <div className="p-3 sm:p-5 border-2 rounded-sm" style={{ borderColor: 'rgba(255,23,68,0.4)', background: 'rgba(255,23,68,0.04)', boxShadow: '0 0 20px rgba(255,23,68,0.05)' }}>
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="text-xl sm:text-2xl shrink-0 animate-pulse">🚨</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                        <span className="font-mono text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-sm font-bold" style={{ color: '#ff1744', backgroundColor: 'rgba(255,23,68,0.15)', border: '1px solid rgba(255,23,68,0.4)' }}>
+                          CRÍTICO
+                        </span>
+                        <span className="font-mono text-[8px] sm:text-[9px]" style={{ color: '#ff1744' }}>04 Mar 2026</span>
+                      </div>
+                      <h3 className="font-mono text-[11px] sm:text-sm font-bold mb-1" style={{ color: '#ff1744' }}>Contenido Gore Intenso — No Apto para Menores</h3>
+                      <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed" style={{ color: 'rgba(255,23,68,0.5)' }}>
+                        La versión 3.0 incluye sistema de desmembramiento, extracción de órganos y sangre dinámica realista. Este juego contiene violencia gráfica extrema. No recomendado para menores de 18 años ni personas sensibles al contenido gore. Juega bajo tu propia responsabilidad.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AUDIO WARNING */}
+                <div className="p-3 sm:p-5 border rounded-sm" style={{ borderColor: 'rgba(255,214,0,0.3)', background: 'rgba(255,214,0,0.03)' }}>
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="text-xl sm:text-2xl shrink-0">🔊</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                        <span className="font-mono text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ffd600', backgroundColor: 'rgba(255,214,0,0.1)', border: '1px solid rgba(255,214,0,0.3)' }}>
+                          AUDIO
+                        </span>
+                        <span className="font-mono text-[8px] sm:text-[9px]" style={{ color: '#ffd600' }}>Permanente</span>
+                      </div>
+                      <h3 className="font-mono text-[11px] sm:text-sm font-bold mb-1" style={{ color: '#ffd600' }}>Usa Auriculares — Audio Binaural Asimétrico</h3>
+                      <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed" style={{ color: 'rgba(255,214,0,0.4)' }}>
+                        El audio binaural es esencial para la ecolocalización. Sin auriculares, no podrás detectar la dirección de los monstruos. Los sustos de sonido pueden ser intensos. Baja el volumen si eres sensible a sonidos repentinos.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* MIC WARNING */}
+                <div className="p-3 sm:p-5 border rounded-sm" style={{ borderColor: 'rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.03)' }}>
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="text-xl sm:text-2xl shrink-0">🎤</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                        <span className="font-mono text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-sm" style={{ color: '#00e5ff', backgroundColor: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.3)' }}>
+                          MICRÓFONO
+                        </span>
+                        <span className="font-mono text-[8px] sm:text-[9px]" style={{ color: '#00e5ff' }}>Permanente</span>
+                      </div>
+                      <h3 className="font-mono text-[11px] sm:text-sm font-bold mb-1" style={{ color: '#00e5ff' }}>Tu Voz Tiene Consecuencias</h3>
+                      <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed" style={{ color: 'rgba(0,229,255,0.4)' }}>
+                        Si activas el micrófono, tu voz real generará ruido en el juego. Los monstruos te detectarán si hablas, respiras fuerte o gritas. El audio no se graba ni se envía a ningún servidor. Se procesa localmente en tu navegador.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* HARDCORE WARNING */}
+                <div className="p-3 sm:p-5 border rounded-sm" style={{ borderColor: 'rgba(156,39,176,0.3)', background: 'rgba(156,39,176,0.03)' }}>
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="text-xl sm:text-2xl shrink-0">💀</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                        <span className="font-mono text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-sm" style={{ color: '#9c27b0', backgroundColor: 'rgba(156,39,176,0.1)', border: '1px solid rgba(156,39,176,0.3)' }}>
+                          HARDCORE
+                        </span>
+                        <span className="font-mono text-[8px] sm:text-[9px]" style={{ color: '#9c27b0' }}>Permanente</span>
+                      </div>
+                      <h3 className="font-mono text-[11px] sm:text-sm font-bold mb-1" style={{ color: '#9c27b0' }}>Modo Hardcore — Permadeath</h3>
+                      <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed" style={{ color: 'rgba(156,39,176,0.4)' }}>
+                        En modo Hardcore tienes una sola vida. Sin HUD, sin linterna, sin indicadores de salud. Solo audio binaural y tu instinto. Si mueres, pierdes todo progreso. El auto-guardado está desactivado en este modo. No hay vuelta atrás.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* PERFORMANCE INFO */}
+                <div className="p-3 sm:p-5 border rounded-sm" style={{ borderColor: 'rgba(118,255,3,0.2)', background: 'rgba(118,255,3,0.02)' }}>
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="text-xl sm:text-2xl shrink-0">⚡</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                        <span className="font-mono text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-sm" style={{ color: '#76ff03', backgroundColor: 'rgba(118,255,3,0.1)', border: '1px solid rgba(118,255,3,0.2)' }}>
+                          RENDIMIENTO
+                        </span>
+                        <span className="font-mono text-[8px] sm:text-[9px]" style={{ color: '#76ff03' }}>04 Mar 2026</span>
+                      </div>
+                      <h3 className="font-mono text-[11px] sm:text-sm font-bold mb-1" style={{ color: '#76ff03' }}>Optimización Recomendada</h3>
+                      <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed" style={{ color: 'rgba(118,255,3,0.35)' }}>
+                        Para la mejor experiencia, usa Chrome o Edge con hardware acceleration activado. El sistema de partículas de sangre y los efectos de gore pueden afectar el rendimiento en dispositivos antiguos. Si experimentas lag, reduce la calidad en Ajustes → Avanzado.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SAVE WARNING */}
+                <div className="p-3 sm:p-5 border rounded-sm" style={{ borderColor: 'rgba(255,109,0,0.2)', background: 'rgba(255,109,0,0.02)' }}>
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="text-xl sm:text-2xl shrink-0">💾</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                        <span className="font-mono text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-sm" style={{ color: '#ff6d00', backgroundColor: 'rgba(255,109,0,0.1)', border: '1px solid rgba(255,109,0,0.2)' }}>
+                          GUARDADO
+                        </span>
+                        <span className="font-mono text-[8px] sm:text-[9px]" style={{ color: '#ff6d00' }}>Permanente</span>
+                      </div>
+                      <h3 className="font-mono text-[11px] sm:text-sm font-bold mb-1" style={{ color: '#ff6d00' }}>Los Datos Se Guardan en Tu Navegador</h3>
+                      <p className="font-mono text-[9px] sm:text-[11px] leading-relaxed" style={{ color: 'rgba(255,109,0,0.35)' }}>
+                        Las partidas se guardan en localStorage. Si limpias los datos del navegador, perderás tu progreso. Usa la función de Exportar Backup para guardar una copia en tu dispositivo. Auto-guardado cada 60 segundos (excepto en Hardcore).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* ===== CONTROLS REFERENCE ===== */}
           <section className="relative z-10 py-8 sm:py-12 px-4 sm:px-6">
             <div className="max-w-md mx-auto text-center">
