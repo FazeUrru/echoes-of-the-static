@@ -300,7 +300,7 @@ export default function EchoGame() {
     <div ref={containerRef} className="relative w-full h-[100dvh] bg-black overflow-hidden select-none game-container" style={{ cursor: gameState === 'playing' && !isMobile ? 'crosshair' : 'default', boxShadow: gameState === 'playing' && engineLiveState.sonarMode === 'passive' ? 'inset 0 0 60px rgba(156,39,176,0.15)' : 'none', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
       onClick={() => { if (gameState === 'playing' && !isMobile && canvasRef.current) canvasRef.current.requestPointerLock(); }}>
 
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }} />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none', pointerEvents: gameState === 'menu' && !isStarted ? 'none' : 'auto' }} />
 
       {/* ===== TOUCH LOOK AREA (Right half of screen for swiping to look) ===== */}
       {isMobile && gameState === 'playing' && (
@@ -798,7 +798,7 @@ export default function EchoGame() {
 
       {/* ===== MENU / LANDING PAGE ===== */}
       {gameState === 'menu' && !isStarted && !showMiniDemo && (
-        <div className="landing-page absolute inset-0 overflow-y-auto bg-black z-10">
+        <div className="landing-page absolute inset-0 overflow-y-auto bg-black z-10" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
           {/* Particle Background */}
           <ParticleBackground />
 
@@ -906,6 +906,25 @@ export default function EchoGame() {
               </SoundWaveButton>
             </div>
 
+            {/* Quick Navigation to sections */}
+            <div className="flex flex-wrap justify-center gap-2 mb-4">
+              <button onClick={() => document.getElementById('section-noticias')?.scrollIntoView({ behavior: 'smooth' })}
+                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95"
+                style={{ color: '#ff1744', borderColor: 'rgba(255,23,68,0.3)', background: 'rgba(255,23,68,0.05)' }}>
+                📰 NOTICIAS
+              </button>
+              <button onClick={() => document.getElementById('section-versiones')?.scrollIntoView({ behavior: 'smooth' })}
+                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95"
+                style={{ color: '#00e5ff', borderColor: 'rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.05)' }}>
+                📋 VERSIONES
+              </button>
+              <button onClick={() => document.getElementById('section-avisos')?.scrollIntoView({ behavior: 'smooth' })}
+                className="font-mono text-[9px] sm:text-[10px] px-3 py-1.5 rounded-sm border transition-all hover:scale-105 active:scale-95"
+                style={{ color: '#ffd600', borderColor: 'rgba(255,214,0,0.3)', background: 'rgba(255,214,0,0.05)' }}>
+                ⚠️ AVISOS
+              </button>
+            </div>
+
             {/* Scroll indicator */}
             <div className="absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 animate-bounce font-mono text-[10px] sm:text-xs" style={{ color: 'rgba(0,229,255,0.3)' }}>
               ▼ DESCUBRE MÁS
@@ -968,7 +987,7 @@ export default function EchoGame() {
           </section>
 
           {/* ===== NOTICIAS (NEWS) SECTION ===== */}
-          <section className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(10,0,0,1) 50%, rgba(0,0,0,1) 100%)' }}>
+          <section id="section-noticias" className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(10,0,0,1) 50%, rgba(0,0,0,1) 100%)' }}>
             <div className="max-w-4xl mx-auto">
               <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#ff1744', textShadow: '0 0 20px rgba(255,23,68,0.3)' }}>
                 📰 NOTICIAS
@@ -1048,7 +1067,7 @@ export default function EchoGame() {
           </section>
 
           {/* ===== HISTÓRICO DE VERSIONES SECTION ===== */}
-          <section className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,5,15,1) 50%, rgba(0,0,0,1) 100%)' }}>
+          <section id="section-versiones" className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,5,15,1) 50%, rgba(0,0,0,1) 100%)' }}>
             <div className="max-w-3xl mx-auto">
               <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#00e5ff', textShadow: '0 0 20px rgba(0,229,255,0.3)' }}>
                 📋 HISTÓRICO DE VERSIONES
@@ -1186,7 +1205,7 @@ export default function EchoGame() {
           </section>
 
           {/* ===== AVISOS (NOTICES) SECTION ===== */}
-          <section className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(15,0,0,1) 50%, rgba(0,0,0,1) 100%)' }}>
+          <section id="section-avisos" className="relative z-10 py-10 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(15,0,0,1) 50%, rgba(0,0,0,1) 100%)' }}>
             <div className="max-w-3xl mx-auto">
               <h2 className="font-mono text-xl sm:text-2xl md:text-3xl tracking-widest text-center mb-2" style={{ color: '#ffd600', textShadow: '0 0 20px rgba(255,214,0,0.3)' }}>
                 ⚠️ AVISOS
