@@ -61,3 +61,36 @@ Stage Summary:
 - Landing page event cards show real progress bars and ✅ when completed
 - All data persisted to localStorage (key: echoes_events)
 - Points system with streak multipliers for consecutive challenge completion
+---
+Task ID: 1
+Agent: Main Agent
+Task: Investigate why nothing was being implemented + Fix + Mobile Optimization + GitHub/Play Store
+
+Work Log:
+- Investigated dev server logs: No compilation errors, all GET / returning 200
+- Ran lint: No errors found
+- Discovered the REAL problem: `.game-container` CSS class had `touch-action: none` which BLOCKED touch scrolling on mobile
+- This meant users on mobile couldn't scroll down the landing page to see Events, Challenges, Multiplayer sections
+- Fixed by removing `touch-action: none` from `.game-container` CSS
+- Added `touch-action: pan-y !important` to `.landing-page` CSS class
+- Added `landingPageRef` to the landing page div
+- Created `scrollToSection()` function that properly scrolls within the container (replacing broken `scrollIntoView`)
+- Added `showFloatingNav` state with scroll position tracking
+- Added floating navigation button (☰) that appears after scrolling past hero
+- Added floating nav panel with section links: Multiplayer, News, Versions, Notices, Events, Challenges, Top
+- Made navigation buttons larger on mobile (minHeight 36px, larger text)
+- Updated version label from v4.0 to v5.0
+- Updated PWA manifest with full description, categories, shortcuts
+- Created SVG echolocation icon for PWA
+- Added Digital Asset Links file for Play Store TWA support
+- Created git bundle for offline export
+- Committed 3 versions: v5.0.1, v5.0.2, v5.0.3
+
+Stage Summary:
+- ROOT CAUSE: `touch-action: none` on `.game-container` blocked ALL touch scrolling on mobile
+- FIXED: Touch scrolling now works on mobile landing page
+- ADDED: Floating navigation menu for mobile section jumping
+- ADDED: Proper scrollToSection function
+- PWA: Enhanced manifest, icons, assetlinks for Play Store TWA
+- GitHub: Cannot push without authentication credentials (no token/key available)
+- Play Store: Requires GitHub repo + Bubblewrap CLI + signing key - documented process
