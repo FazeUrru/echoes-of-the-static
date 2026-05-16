@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#000"/>
+  <circle cx="256" cy="220" r="120" fill="none" stroke="#00e5ff" stroke-width="8" opacity="0.3"/>
+  <circle cx="256" cy="220" r="80" fill="none" stroke="#00e5ff" stroke-width="5" opacity="0.5"/>
+  <circle cx="256" cy="220" r="40" fill="none" stroke="#00e5ff" stroke-width="3" opacity="0.8"/>
+  <circle cx="256" cy="220" r="8" fill="#00e5ff"/>
+  <text x="256" y="400" text-anchor="middle" font-family="monospace" font-size="48" font-weight="bold" fill="#00e5ff">ECHOES</text>
+  <text x="256" y="450" text-anchor="middle" font-family="monospace" font-size="28" fill="#0097a7">OF THE STATIC</text>
+</svg>
