@@ -75,6 +75,10 @@ export default function EchoGame() {
   // ---- Landing page section state ----
   const [landingSection, setLandingSection] = useState<'hero' | 'demo' | 'diary' | 'trailer'>('hero');
 
+  // ---- Cinematic overlay state ----
+  const [showCinematic, setShowCinematic] = useState(false);
+  const [cinematicTitle, setCinematicTitle] = useState('');
+
   // ---- Save system state ----
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<number | null>(null);
   const [showAutoSaveNotice, setShowAutoSaveNotice] = useState(false);
@@ -797,7 +801,7 @@ export default function EchoGame() {
       )}
 
       {/* ===== MENU / LANDING PAGE ===== */}
-      {gameState === 'menu' && !isStarted && !showMiniDemo && (
+      {gameState === 'menu' && !isStarted && !showMiniDemo && !showCinematic && (
         <div className="landing-page absolute inset-0 overflow-y-auto bg-black z-10" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
           {/* Particle Background */}
           <ParticleBackground />
@@ -885,7 +889,12 @@ export default function EchoGame() {
               <SoundWaveButton onClick={() => {
                 const eng = engineRef.current;
                 if (eng) {
-                  eng.playCinematic(EchoGameEngine.TRAILER_CINEMATIC, () => {});
+                  setShowCinematic(true);
+                  setCinematicTitle('TRÁILER');
+                  eng.playCinematic(EchoGameEngine.TRAILER_CINEMATIC, () => {
+                    setShowCinematic(false);
+                    setCinematicTitle('');
+                  });
                 }
               }} color="#9c27b0">
                 VER TRÁILER
@@ -893,7 +902,12 @@ export default function EchoGame() {
               <SoundWaveButton onClick={() => {
                 const eng = engineRef.current;
                 if (eng) {
-                  eng.playCinematic(EchoGameEngine.STORY_CINEMATIC, () => {});
+                  setShowCinematic(true);
+                  setCinematicTitle('HISTORIA');
+                  eng.playCinematic(EchoGameEngine.STORY_CINEMATIC, () => {
+                    setShowCinematic(false);
+                    setCinematicTitle('');
+                  });
                 }
               }} color="#8b0000">
                 📖 HISTORIA COMPLETA
@@ -1354,6 +1368,27 @@ export default function EchoGame() {
               ECHOES OF THE STATIC v3.0 — Ecos de la Estática
             </p>
           </footer>
+        </div>
+      )}
+
+      {/* ===== CINEMATIC OVERLAY ===== */}
+      {showCinematic && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-end pointer-events-none">
+          {/* Title indicator */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 font-mono text-[10px] sm:text-xs tracking-widest opacity-40" style={{ color: '#00e5ff' }}>
+            {cinematicTitle}
+          </div>
+          {/* Skip button */}
+          <button className="pointer-events-auto mb-6 sm:mb-10 font-mono text-[10px] sm:text-xs px-4 py-2 rounded-sm border transition-all hover:scale-105 active:scale-95"
+            style={{ color: '#888', borderColor: 'rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.6)' }}
+            onClick={() => {
+              const eng = engineRef.current;
+              if (eng) eng.skipCinematic();
+              setShowCinematic(false);
+              setCinematicTitle('');
+            }}>
+            SALTAR ▶▶
+          </button>
         </div>
       )}
 
